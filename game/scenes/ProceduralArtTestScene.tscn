@@ -1,0 +1,52 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/ProceduralArt/ProceduralCharacter.cs" id="2"]
+[ext_resource type="Script" path="res://src/ProceduralArt/ProceduralEnvironmentBlock.cs" id="3"]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0.45, 0.55, 0.7, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.4, 0.4, 0.46, 1)
+ambient_light_energy = 0.55
+tonemap_mode = 0
+
+[node name="ProceduralArtTestScene" type="Node3D"]
+OutputPath = "C:/Users/Mako/Desktop/Gioco/docs/proceduralart-test-capture.png"
+FramesToWait = 40
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.94, 0.342, 0, -0.342, 0.94, 0, 1.35, 3.3)
+current = true
+fov = 55.0
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.766, -0.44, 0.469, 0, 0.729, 0.684, -0.643, -0.524, 0.559, 2, 3, 2)
+light_energy = 0.85
+shadow_enabled = true
+
+[node name="FillLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, 0.25, -0.433, 0, 0.866, 0.5, 0.5, -0.433, 0.75, -2, 1.5, -1.5)
+light_energy = 0.18
+light_color = Color(0.7, 0.8, 1, 1)
+
+[node name="ProceduralCharacter" type="Node3D" parent="."]
+script = ExtResource("2")
+RunBlend = 1.0
+
+[node name="StonePlatform" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+script = ExtResource("3")
+BlockKind = 0
+BlockSize = Vector3(3, 0.5, 1.5)
+Seed = 1
+
+[node name="WoodBeam" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.966, 0.259, 0, -0.259, 0.966, 0, 0, 0, 1, 1.7, 0.35, -0.2)
+script = ExtResource("3")
+BlockKind = 1
+BlockSize = Vector3(0.22, 0.22, 1.9)
+Seed = 2

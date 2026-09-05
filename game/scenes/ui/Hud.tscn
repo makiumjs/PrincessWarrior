@@ -1,0 +1,138 @@
+[gd_scene load_steps=3 format=3 uid="uid://c2h8f4dqk8xw1"]
+
+[ext_resource type="Script" path="res://src/UI/Hud.cs" id="1_hud"]
+[ext_resource type="Script" path="res://src/UI/AbilityIcon.cs" id="2_icon"]
+
+[node name="Hud" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_hud")
+
+[node name="HealthPanel" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 24.0
+offset_top = 24.0
+offset_right = 264.0
+offset_bottom = 64.0
+
+[node name="HealthBar" type="ProgressBar" parent="HealthPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="HealthLabel" type="Label" parent="HealthPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "100 / 100"
+
+[node name="AbilitiesBox" type="HBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 0
+offset_left = 24.0
+offset_top = 76.0
+offset_right = 400.0
+offset_bottom = 140.0
+theme_override_constants/separation = 12
+
+[node name="AbilityDoubleJump" type="VBoxContainer" parent="AbilitiesBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="Icon" type="Control" parent="AbilitiesBox/AbilityDoubleJump"]
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+script = ExtResource("2_icon")
+Ability = 1
+
+[node name="Label" type="Label" parent="AbilitiesBox/AbilityDoubleJump"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "Double Jump"
+
+[node name="AbilityDash" type="VBoxContainer" parent="AbilitiesBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="Icon" type="Control" parent="AbilitiesBox/AbilityDash"]
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+script = ExtResource("2_icon")
+Ability = 2
+
+[node name="Label" type="Label" parent="AbilitiesBox/AbilityDash"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "Dash"
+
+[node name="AbilityWallJump" type="VBoxContainer" parent="AbilitiesBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="Icon" type="Control" parent="AbilitiesBox/AbilityWallJump"]
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+script = ExtResource("2_icon")
+Ability = 4
+
+[node name="Label" type="Label" parent="AbilitiesBox/AbilityWallJump"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "Wall Jump"
+
+[node name="AbilityChargeAttack" type="VBoxContainer" parent="AbilitiesBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="Icon" type="Control" parent="AbilitiesBox/AbilityChargeAttack"]
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+script = ExtResource("2_icon")
+Ability = 8
+
+[node name="Label" type="Label" parent="AbilitiesBox/AbilityChargeAttack"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "Charge Attack"
+
+[node name="CheckpointPrompt" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.0
+anchor_right = 0.5
+anchor_bottom = 0.0
+offset_left = -200.0
+offset_top = 24.0
+offset_right = 200.0
+offset_bottom = 60.0
+grow_horizontal = 2
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "Checkpoint Reached"
+
+[node name="CheckpointTimer" type="Timer" parent="."]
+unique_name_in_owner = true
+wait_time = 2.0
+one_shot = true

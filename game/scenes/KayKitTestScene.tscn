@@ -1,0 +1,24 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/Core/Testing/KayKitTestDriver.cs" id="1"]
+
+[node name="KayKitTest" type="Node3D"]
+script = ExtResource("1")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0, 0, 1, 0.087, 0.996, 0, -0.996, 0.087, 0, 3.6, 1.25, 0)
+fov = 45.0
+
+[node name="KeyLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.766, -0.353, 0.537, 0, 0.836, 0.549, -0.643, -0.42, 0.640, 2, 4, 3)
+light_energy = 1.6
+shadow_enabled = true
+
+[node name="FillLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.7, 0.2, -0.68, 0, 0.96, 0.28, 0.71, 0.2, -0.67, -3, 3, 2)
+light_energy = 0.45
+
+[node name="Floor" type="MeshInstance3D" parent="."]
+transform = Transform3D(6, 0, 0, 0, 1, 0, 0, 0, 6, 0, 0, 0)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]

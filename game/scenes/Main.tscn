@@ -1,0 +1,60 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://src/World/DungeonRoomBuilder.cs" id="1_room"]
+[ext_resource type="Script" path="res://src/World/ParallaxBackdrop.cs" id="8_par"]
+[ext_resource type="Script" path="res://src/PlayerCamera/PlayerController.cs" id="2_player"]
+[ext_resource type="Script" path="res://src/PlayerCamera/SideScrollCamera.cs" id="3_camera"]
+[ext_resource type="Script" path="res://src/PlayerCamera/PlayerVisual.cs" id="4_visual"]
+[ext_resource type="Script" path="res://src/Combat/CombatController.cs" id="5_combat"]
+[ext_resource type="PackedScene" path="res://scenes/ui/Hud.tscn" id="6_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/PauseMenu.tscn" id="7_pause"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
+radius = 0.4
+height = 1.6
+
+[node name="Main" type="Node3D"]
+
+[node name="Backdrop" type="Node3D" parent="."]
+script = ExtResource("8_par")
+CameraPath = NodePath("../SideScrollCamera")
+
+[node name="Room" type="Node3D" parent="."]
+script = ExtResource("1_room")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.766, -0.353, 0.537, 0, 0.836, 0.549, -0.643, -0.42, 0.640, 0, 8, 6)
+light_energy = 0.45
+shadow_enabled = true
+
+[node name="Fill" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.7, 0.2, -0.68, 0, 0.96, 0.28, 0.71, 0.2, -0.67, -4, 5, 4)
+light_energy = 0.12
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 2, 0)
+script = ExtResource("2_player")
+UnlockedAbilities = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+shape = SubResource("CapsuleShape3D_player")
+
+[node name="PlayerVisual" type="Node3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.9, 0)
+script = ExtResource("4_visual")
+WeaponScene = "res://assets/kaykit/props/sword_1handed.gltf"
+
+[node name="CombatController" type="Node3D" parent="Player"]
+script = ExtResource("5_combat")
+
+[node name="SideScrollCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 12)
+projection = 1
+size = 10.5
+script = ExtResource("3_camera")
+TargetPath = NodePath("../Player")
+HeightOffset = 2.6
+
+[node name="Hud" parent="." instance=ExtResource("6_hud")]
+
+[node name="PauseMenu" parent="." instance=ExtResource("7_pause")]

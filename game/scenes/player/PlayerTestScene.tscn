@@ -1,0 +1,91 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://src/PlayerCamera/PlayerController.cs" id="1_player"]
+[ext_resource type="Script" path="res://src/PlayerCamera/SideScrollCamera.cs" id="2_camera"]
+[ext_resource type="Script" path="res://src/Combat/CombatController.cs" id="3_combat"]
+[ext_resource type="Script" path="res://src/PlayerCamera/PlayerVisual.cs" id="4_visual"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
+size = Vector3(40, 1, 4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_floor"]
+size = Vector3(40, 1, 4)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wall"]
+size = Vector3(0.6, 6, 4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_wall"]
+size = Vector3(0.6, 6, 4)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ledge"]
+size = Vector3(4, 0.5, 4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ledge"]
+size = Vector3(4, 0.5, 4)
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_player"]
+radius = 0.4
+height = 1.8
+
+[node name="PlayerTestScene" type="Node3D"]
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8137977, -0.4082483, 0.4131759, 0, 0.7126941, 0.7014623, -0.5811573, -0.5708294, 0.5799181, 0, 8, 4)
+shadow_enabled = true
+
+[node name="Floor" type="StaticBody3D" parent="."]
+position = Vector3(4, -0.5, 0)
+collision_layer = 2
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("BoxShape3D_floor")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("BoxMesh_floor")
+
+[node name="Wall" type="StaticBody3D" parent="."]
+position = Vector3(8, 3, 0)
+collision_layer = 2
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Wall"]
+shape = SubResource("BoxShape3D_wall")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Wall"]
+mesh = SubResource("BoxMesh_wall")
+
+[node name="Ledge" type="StaticBody3D" parent="."]
+position = Vector3(-8, 3.25, 0)
+collision_layer = 2
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ledge"]
+shape = SubResource("BoxShape3D_ledge")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ledge"]
+mesh = SubResource("BoxMesh_ledge")
+
+[node name="Player" type="CharacterBody3D" parent="."]
+position = Vector3(0, 0.95, 0)
+script = ExtResource("1_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+shape = SubResource("CapsuleShape3D_player")
+
+[node name="PlayerVisual" type="Node3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.9, 0)
+script = ExtResource("4_visual")
+
+[node name="CombatController" type="Node3D" parent="Player"]
+script = ExtResource("3_combat")
+
+[node name="SideScrollCamera" type="Camera3D" parent="."]
+position = Vector3(0, 2.35, 12)
+current = true
+script = ExtResource("2_camera")
+TargetPath = NodePath("../Player")

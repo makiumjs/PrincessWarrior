@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://c8j3n0v0k7q4p"]
+
+[ext_resource type="Script" path="res://src/Audio/AudioTestDriver.cs" id="1_driver"]
+
+[node name="AudioTestScene" type="Node"]
+
+[node name="Driver" type="Node" parent="."]
+script = ExtResource("1_driver")

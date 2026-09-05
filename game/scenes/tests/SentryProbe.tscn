@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/Main.tscn" id="1_main"]
+[ext_resource type="Script" path="res://src/AI/SentryProbe.cs" id="2_probe"]
+
+[node name="SentryProbe" type="Node"]
+
+[node name="Game" parent="." instance=ExtResource("1_main")]
+
+[node name="Probe" type="Node" parent="."]
+script = ExtResource("2_probe")
