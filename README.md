@@ -122,7 +122,9 @@ Fifty checks, in order:
 51. the last room is a boss: armoured, a heavy blow is chip damage and does
     not interrupt; parried open, the same blow lands in full; and the run
     cannot end while it lives
-52. no check from 3 onward printed an engine error while reaching its own PASS
+52. a landed blow, a blow absorbed by armour and a perfect parry each leave a
+    different mark, the camera is punched, and none of it accumulates
+53. no check from 3 onward printed an engine error while reaching its own PASS
 
 **One unresolved intermittent.** The engine-quiet check fired on two consecutive gate runs
 immediately after a rebuild, naming engine errors, and has passed on the
@@ -262,3 +264,4 @@ commercial use, attribution not required. Credit is given here anyway.
 - KayKit Dungeon Pack 1.1 — walls, floors, props, torches
 
 Full licence texts ship alongside the assets in `game/assets/kaykit/`.
+"# PrincessWarrior" 
