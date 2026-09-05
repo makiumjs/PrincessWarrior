@@ -119,7 +119,10 @@ Fifty checks, in order:
 49. the pause menu is in the game, resumes cleanly, and restarts the run
 50. the game boots into a title, with no world running behind it, and Play
     starts the run; no key drives two actions at once
-51. no check from 3 onward printed an engine error while reaching its own PASS
+51. the last room is a boss: armoured, a heavy blow is chip damage and does
+    not interrupt; parried open, the same blow lands in full; and the run
+    cannot end while it lives
+52. no check from 3 onward printed an engine error while reaching its own PASS
 
 **One unresolved intermittent.** The engine-quiet check fired on two consecutive gate runs
 immediately after a rebuild, naming engine errors, and has passed on the

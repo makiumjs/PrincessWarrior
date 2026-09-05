@@ -435,6 +435,15 @@ public partial class TraversalBotTest : Node
             _room.RebuildAs(index);
         }
 
+        // The last room is a boss fight now, and this check is about whether
+        // the FLOOR can be walked. Leaving the boss in measured the bot's
+        // combat instead: it stalled at (86.2, -1.8), which is below the
+        // floor -- knocked into a gap by a 22-damage swing. Freeing it rather
+        // than killing it also opens the sealed exit, since the seal asks
+        // whether a live boss exists.
+        foreach (var n in GetTree().GetNodesInGroup("boss"))
+            n.QueueFree();
+
         _startX = _player.GlobalPosition.X;
         _startY = _player.GlobalPosition.Y;
         _maxY = _startY;

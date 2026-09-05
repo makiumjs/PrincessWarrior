@@ -21,13 +21,16 @@ crystals grant Dash, Double Jump, Wall Jump and Charge Attack — each placed
 immediately before the obstacle that needs it. A door at the end leads to the
 next room, generated with a different layout and a higher difficulty.
 
-A run is **six rooms**, and then it ends: the door of the last one shows RUN
-COMPLETE instead of opening onto another corridor. Difficulty climbs for the
+A run is **six rooms**, and the last one is a boss. Its door is sealed while
+the Warden lives, and the Warden cannot be out-traded: armoured, every blow is
+reduced to chip damage and none of them interrupt it, so the only way it opens
+is a perfect parry. Kill it and the run shows RUN COMPLETE instead of opening
+onto another corridor. Difficulty climbs for the
 first three rooms and is at maximum for the last three.
 
 ## What is proven, and by what
 
-`bash tools/verify.sh` — 51 checks, currently all green, and green on the last
+`bash tools/verify.sh` — 52 checks, currently all green, and green on the last
 sixteen consecutive full runs. Two runs before those failed the engine-quiet check (
 errors) immediately after a rebuild and have not reproduced since; the gate now
 saves the evidence to `tools/.engine-errors.log` when that check fires, because
@@ -618,11 +621,63 @@ now decided, two of them by you.
    warlock that holds its range so closing costs you the ground it keeps taking
    back.
 
+## A boss, and the first time the parry is the cheapest option
+
+Four enemy types and no boss meant the run had no shape at the end: the sixth
+room was the fifth room with more in it. Worse, the parry -- the mechanic with
+the most code behind it -- was never the cheapest way to win anything. Every
+type in the roster is beaten by movement: walk up to the grunt, close on the
+sentry, wait out the skirmisher, take back the ground the warlock gives up.
+All four answer to the same verb. A player had no reason to ever learn the
+other one.
+
+The Warden is **armoured while it is doing anything**. A blow that lands on
+armour is cut to 2 damage and, just as importantly, **does not interrupt it**
+-- without that second half a player could stagger-lock it on 2 damage a swing
+and the parry would stay optional. It opens only when a perfect parry staggers
+it, and then it is fully open for 1.6 seconds, which is one charged heavy or
+three light swings. Measured: 55 damage on armour removed **2 hp**; the same 55
+during the stagger removed **55**.
+
+Chip damage is deliberately not zero. A boss that is literally invulnerable
+outside one window reads as broken rather than hard, because nothing on screen
+tells "absorbed" apart from "the hit did not register" -- so a player who never
+lands a parry still wins, in about sixty hits. The HUD bar says which state it
+is in: grey while absorbing, lit while open. Below half health it enrages,
+throws at range, and commits faster, so standing outside its reach stops being
+an answer.
+
+Three things this turned up that were not the boss:
+
+- **A player standing in the doorway when the boss died stayed locked out.**
+  `BodyEntered` does not fire again for a body that never left, and the doorway
+  is exactly where the fight's last knockback puts you. The exit now re-checks
+  what is already inside it, over twelve physics frames rather than one --
+  in `_PhysicsProcess`, because in `_Process` the overlap answer is a frame
+  stale, which is long enough to miss.
+- **The sixth vacuous assertion.** The enemy-mix check drew its "a bolt was
+  airborne" evidence entirely from the long dwell in room 5, and room 5 is now
+  a melee boss. It did not fail: it went quiet in the shape of a pass, because
+  "0 bolts left after teardown" is trivially true when no bolt ever existed.
+  It now steps back to the last room that contains something that fires.
+- **A blunt 100000-damage kill removed 2 hp.** The run-arc check kills the boss
+  to test the ending rather than fighting it, and the armour absorbed the
+  number. That is the armour working, and it took a trace to see because the
+  number looked too decisive to question.
+
+## The project is under version control
+
+As of this commit it is a git repository, pushed to GitHub. Until then every
+change was irreversible -- raised repeatedly, including when an entire unused
+room subsystem was deleted on the strength of a build with zero warnings.
+
+The engine binary (258 MB), the raw CC0 asset packs (119 MB) and the playtest
+frame dumps (35 MB) are excluded, with the reason written next to each rule in
+`.gitignore`. What is committed is 5.4 MB: the source, the scenes, the imported
+assets the game actually loads, and the docs.
+
 ## What is genuinely open
 
-- **No version control.** The project is not a git repository, so every change
-  is irreversible. This was raised when the room system was deleted and the
-  decision was to delete anyway; it applies to everything else too.
 - **Tuning by feel.** The parry's 0.14s perfect window, six rooms, the
   difficulty ramp -- all defensible on paper, none confirmed by playing.
 - **Chimney and DashGap are unproven in isolation.** Both cross fine inside a

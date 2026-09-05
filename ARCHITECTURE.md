@@ -200,10 +200,24 @@ enemy needs anyway: ledges, drops, jump arcs. `NavigationAgent3D` is still
 present on the node for arrival bookkeeping and possible future use, but
 movement no longer depends on it.
 
+**Two seams, added for the boss.** `AbsorbDamage(int)` and
+`StaggersOnHit(DamageInfo)` are identity and `true` for every normal enemy.
+They exist so a type can be armoured without duplicating the death and
+knockback path, which is where the bug would live: the killing blow's impulse
+was already lost once in this file by an early return, and the fix reads as
+obvious only in hindsight.
+
 ### UI — `src/UI/`
-HUD (health, unlocked-ability icons, checkpoint prompt), pause menu. Pure
-consumer of signals — never calls into gameplay subsystems directly, only
-listens on the `EventBus` autoload.
+HUD (health, unlocked-ability icons, checkpoint prompt, boss bar), title
+screen, pause menu. Pure consumer of signals — never calls into gameplay
+subsystems directly, only listens on the `EventBus` autoload.
+
+The boss bar is why `BossStateChanged` exists on the bus at all. Letting the
+HUD find the boss node would have been three lines instead of a signal and a
+handler, and would have made the HUD the one place in the project that knows
+a gameplay type. The title screen reads `InputMap` rather than a typed list
+for the same reason in reverse: the bindings have one home, and a second copy
+of them is a label that keeps naming the old key.
 
 ### Save — `src/Save/`
 `SaveManager.cs` autoload. Persists `SaveData` (see Shared types) to

@@ -39,6 +39,13 @@ public partial class RunRestartTest : Node
         // Walk the run to its end by crossing each exit.
         if (_f > 30 && _f % 45 == 0 && _completions == 0)
         {
+            // The last room's exit is sealed behind the boss. This check owns
+            // what happens AFTER a run ends, so the fight is skipped rather
+            // than fought -- freeing the boss opens the seal, because the seal
+            // asks whether a live one exists.
+            foreach (var n in GetTree().GetNodesInGroup("boss"))
+                n.QueueFree();
+
             var exit = _room.GetNodeOrNull<Node3D>("RoomExit");
             if (exit != null) _player.GlobalPosition = exit.GlobalPosition;
         }

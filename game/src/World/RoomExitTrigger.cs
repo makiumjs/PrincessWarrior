@@ -100,7 +100,9 @@ public partial class RoomExitTrigger : Area3D
     private bool BossAlive()
     {
         foreach (var n in GetTree().GetNodesInGroup("boss"))
-            if (n is AI.EnemyController e && e.State != AI.EnemyController.EnemyState.Dead)
+            if (n is AI.EnemyController e
+                && !e.IsQueuedForDeletion()
+                && e.State != AI.EnemyController.EnemyState.Dead)
                 return true;
         return false;
     }
