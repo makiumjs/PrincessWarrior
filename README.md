@@ -52,13 +52,22 @@ One command runs the whole gate and exits non-zero if anything fails:
 bash tools/verify.sh
 ```
 
-A fifth rule, learned the hard way and worth stating with the others: **an
+Two rules learned the hard way, worth stating with the others. **An
 edit that silently changes nothing is worse than one that fails.** A one-line
 call was dropped by a search-and-replace whose pattern no longer matched, and
 because nothing asserted the match, the build stayed clean, the code looked
 right and four checks HUNG instead of failing -- a hang reads as "slow" long
 before it reads as "broken". Every scripted edit in this project now asserts its
 anchor before writing.
+
+A sixth: **while the gate is running, change nothing it reads from disk.** The
+obvious half is not rebuilding -- every check after step 1 runs the compiled
+assembly, so a rebuild mid-run swaps it underneath and the rest of the gate
+reports on a build that never passed step 1. The half that actually bit was
+scenes: `.tscn` files are loaded fresh by every check, so editing one to point
+at a class the running assembly does not have yet produced four engine errors
+in checks that had nothing to do with the edit. Both times the result looked
+like a finding and was an artefact.
 
 Fifty checks, in order:
 
@@ -124,7 +133,9 @@ Fifty checks, in order:
     cannot end while it lives
 52. a landed blow, a blow absorbed by armour and a perfect parry each leave a
     different mark, the camera is punched, and none of it accumulates
-53. no check from 3 onward printed an engine error while reaching its own PASS
+53. the options screen opens from the title, a key already taken by another
+    action is refused, and a rebind is still there after a restart
+54. no check from 3 onward printed an engine error while reaching its own PASS
 
 **One unresolved intermittent.** The engine-quiet check fired on two consecutive gate runs
 immediately after a rebuild, naming engine errors, and has passed on the

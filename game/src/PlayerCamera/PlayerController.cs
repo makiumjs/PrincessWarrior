@@ -487,6 +487,16 @@ public partial class PlayerController : CharacterBody3D, IDamageable
             }
 
             EventBus.Instance?.EmitParried(perfect, GlobalPosition);
+
+            // Gold for a perfect one, dull steel for an ordinary block. Parented
+            // to the parent rather than to the player, so the burst stays where
+            // the blow was turned aside instead of riding along afterwards.
+            Combat.ImpactBurst.Spawn(
+                GetParent(),
+                GlobalPosition + new Vector3(FacingSign * 0.5f, 0.2f, 0f),
+                perfect ? new Color(1f, 0.85f, 0.35f) : new Color(0.72f, 0.76f, 0.82f),
+                reach: perfect ? 1.15f : 0.6f,
+                life: perfect ? 0.32f : 0.20f);
             return;
         }
 

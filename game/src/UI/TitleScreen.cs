@@ -31,15 +31,26 @@ public partial class TitleScreen : Control
     };
 
     private Button _playButton;
+    private Button _optionsButton;
     private Button _quitButton;
+    private OptionsMenu _options;
 
     public override void _Ready()
     {
+        // Saved bindings before anything reads them, including the controls
+        // list below. Without this the title would confidently print the
+        // project defaults over a rebound keyboard.
+        Core.InputSettings.EnsureApplied();
+
         _playButton = GetNode<Button>("%PlayButton");
+        _optionsButton = GetNode<Button>("%OptionsButton");
         _quitButton = GetNode<Button>("%QuitButton");
+        _options = GetNode<OptionsMenu>("%OptionsMenu");
 
         _playButton.Pressed += OnPlayPressed;
+        _optionsButton.Pressed += OnOptionsPressed;
         _quitButton.Pressed += OnQuitPressed;
+        _options.Closed += OnOptionsClosed;
 
         GetNode<Label>("%ControlsLabel").Text = BuildControlsText();
 
@@ -51,7 +62,9 @@ public partial class TitleScreen : Control
     public override void _ExitTree()
     {
         if (_playButton != null) _playButton.Pressed -= OnPlayPressed;
+        if (_optionsButton != null) _optionsButton.Pressed -= OnOptionsPressed;
         if (_quitButton != null) _quitButton.Pressed -= OnQuitPressed;
+        if (_options != null) _options.Closed -= OnOptionsClosed;
     }
 
     private void OnPlayPressed()
@@ -61,6 +74,21 @@ public partial class TitleScreen : Control
         // which is exactly the bug the pause menu's Restart had.
         GetTree().Paused = false;
         GetTree().ChangeSceneToFile(GameScene);
+    }
+
+    private void OnOptionsPressed()
+    {
+        _options.Refresh();
+        _options.Visible = true;
+    }
+
+    /// The controls list is rebuilt on the way out, not only at startup: the
+    /// player may have just changed the very keys it names, and a list that
+    /// still shows the old ones is worse than no list.
+    private void OnOptionsClosed()
+    {
+        GetNode<Label>("%ControlsLabel").Text = BuildControlsText();
+        _playButton.GrabFocus();
     }
 
     private void OnQuitPressed() => GetTree().Quit();

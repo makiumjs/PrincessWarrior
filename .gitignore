@@ -2,7 +2,6 @@
 game/.godot/
 game/.mono/
 game/android/
-export_presets.cfg
 
 # .NET build output
 **/bin/
@@ -14,6 +13,13 @@ export_presets.cfg
 tools/Godot_v4.7.2-stable_mono_win64/
 tools/.engine-errors.log
 tools/capture/
+
+# Export output. export_presets.cfg itself IS committed: it is desktop-only
+# configuration with no secrets in it, and it is the kind of file that is
+# painful to lose and easy to forget. Revisit this if a signing keystore is
+# ever added, which would put a password in it.
+game/build/
+game/exports/
 
 # Raw CC0 asset downloads: 119 MB of packs and their zips. The imported
 # copies the game actually loads are committed under game/assets.

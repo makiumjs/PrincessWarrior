@@ -43,7 +43,19 @@ public partial class SideScrollCamera : Camera3D
 
     [ExportGroup("Feel")]
     [Export] public float LandingShakeStrength = 0.08f;   // small camera framing punch on landing
-    [Export] public float ShakeDecaySpeed = 6f;
+    /// Units per second, applied with MoveToward -- so this is a LINEAR decay
+    /// and the number is a lifetime, not a feel. At the old 6.0 it removed 0.1
+    /// per frame at 60fps, which meant the 0.08 landing punch was gone in less
+    /// than one frame and had never been visible: the camera lerps toward its
+    /// desired position, so a single-frame offset barely moves it at all.
+    /// Measured on the parry, which starts at 0.22: two frames after the hit
+    /// it read 0.020. At 1.2 the same punch lasts about 0.18s.
+    [Export] public float ShakeDecaySpeed = 1.2f;
+    /// A perfect parry is the hardest thing in the game to do and, until this,
+    /// the quietest: a sound cue and nothing on screen. Nearly three times the
+    /// landing punch, because it has to read as a different KIND of event, not
+    /// a bigger version of stepping off a ledge.
+    [Export] public float ParryShakeStrength = 0.22f;
 
     private Vector2 _focus;          // dead-zone-tracked focus point, world X/Y
     private float _lookAheadCurrent; // smoothed look-ahead offset (signed, along X)
@@ -55,16 +67,32 @@ public partial class SideScrollCamera : Camera3D
         Target = GetNodeOrNull<PlayerController>(TargetPath);
 
         if (LostCrownlike.Core.EventBus.Instance != null)
+        {
             LostCrownlike.Core.EventBus.Instance.Landed += OnLanded;
+            LostCrownlike.Core.EventBus.Instance.Parried += OnParried;
+        }
     }
 
     public override void _ExitTree()
     {
         if (LostCrownlike.Core.EventBus.Instance != null)
+        {
             LostCrownlike.Core.EventBus.Instance.Landed -= OnLanded;
+            LostCrownlike.Core.EventBus.Instance.Parried -= OnParried;
+        }
     }
 
+    /// Read-only, for checks: shake is the only part of the camera's response
+    /// that leaves no trace in its position once it has decayed.
+    public float ShakeMagnitude => _shakeMagnitude;
+
     private void OnLanded() => _shakeMagnitude = LandingShakeStrength;
+
+    /// An ordinary parry gets a fraction of it. The two have to be told apart
+    /// by feel as well as by ear, or the player never learns which one they
+    /// just did -- and learning that is the whole skill.
+    private void OnParried(bool perfect, Vector3 at) =>
+        _shakeMagnitude = perfect ? ParryShakeStrength : ParryShakeStrength * 0.35f;
 
     public override void _Process(double delta)
     {

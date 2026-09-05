@@ -1,0 +1,7 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource type="PackedScene" path="res://scenes/ui/Title.tscn" id="1_title"]
+[ext_resource type="Script" path="res://src/UI/OptionsTest.cs" id="2_test"]
+[node name="OptionsTestHost" type="Node"]
+[node name="Title" parent="." instance=ExtResource("1_title")]
+[node name="Test" type="Node" parent="."]
+script = ExtResource("2_test")

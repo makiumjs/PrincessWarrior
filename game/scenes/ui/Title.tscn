@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://b7titlescreen01"]
+[gd_scene load_steps=3 format=3 uid="uid://b7titlescreen01"]
 
 [ext_resource type="Script" path="res://src/UI/TitleScreen.cs" id="1_title"]
+[ext_resource type="PackedScene" path="res://scenes/ui/Options.tscn" id="2_options"]
 
 [node name="TitleScreen" type="Control"]
 layout_mode = 3
@@ -66,6 +67,13 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Play"
 
+[node name="OptionsButton" type="Button" parent="CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Options"
+
 [node name="QuitButton" type="Button" parent="CenterContainer/VBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(220, 40)
@@ -94,3 +102,6 @@ theme_override_colors/font_color = Color(0.68, 0.65, 0.6, 1)
 theme_override_font_sizes/font_size = 14
 vertical_alignment = 2
 text = "controls"
+
+[node name="OptionsMenu" parent="." instance=ExtResource("2_options")]
+unique_name_in_owner = true

@@ -239,8 +239,22 @@ public partial class EnemyController : CharacterBody3D, IDamageable
         if (State == EnemyState.Dead)
             return;
 
-        Health -= AbsorbDamage(info.Amount);
+        int landed = AbsorbDamage(info.Amount);
+        Health -= landed;
         _pendingKnockback = new Vector2(info.Knockback.X, info.Knockback.Y);
+
+        // A blow that was mostly absorbed must not look like one that landed.
+        // This is the answer to the boss's own design note: on screen,
+        // "absorbed" and "the hit did not register" were indistinguishable,
+        // and a player cannot learn a rule they cannot see. Dull and small for
+        // armour, red and wide for a real hit.
+        bool absorbed = landed < info.Amount;
+        Combat.ImpactBurst.Spawn(
+            GetParent(),
+            GlobalPosition + new Vector3(0f, 1f, 0f),
+            absorbed ? new Color(0.58f, 0.61f, 0.66f) : new Color(1f, 0.34f, 0.26f),
+            reach: absorbed ? 0.4f : 0.85f,
+            life: absorbed ? 0.15f : 0.24f);
 
         if (Health <= 0)
         {

@@ -30,7 +30,7 @@ first three rooms and is at maximum for the last three.
 
 ## What is proven, and by what
 
-`bash tools/verify.sh` — 52 checks, currently all green, and green on the last
+`bash tools/verify.sh` — 54 checks, currently all green, and green on the last
 sixteen consecutive full runs. Two runs before those failed the engine-quiet check (
 errors) immediately after a rebuild and have not reproduced since; the gate now
 saves the evidence to `tools/.engine-errors.log` when that check fires, because
@@ -664,6 +664,52 @@ Three things this turned up that were not the boss:
   to test the ending rather than fighting it, and the armour absorbed the
   number. That is the armour working, and it took a trace to see because the
   number looked too decisive to question.
+
+## The camera punch had never been visible
+
+A perfect parry is the hardest thing in the game to do and, until now, the
+quietest: a sound cue and nothing on screen. Adding a camera punch to it turned
+up that the one already there did not work either.
+
+`ShakeDecaySpeed` was 6.0, applied with `MoveToward` — a LINEAR decay in units
+per second, so 0.1 per frame at 60fps. The landing punch is 0.08, which means
+it was gone **in less than one frame**, and since the camera lerps toward its
+desired position, a single-frame offset barely moves it. Measured on the parry,
+which starts at 0.22: two frames after the blow it read **0.020**. At 1.2 the
+same punch lasts about 0.18s and reads as an impact.
+
+Impacts also leave a mark now: red and wide for a blow that landed, dull and
+small for one the boss's armour ate, gold for a perfect parry. The second one
+is not decoration — it is the answer to the boss's own design problem, that on
+screen "absorbed" and "the hit did not register" were the same picture, and a
+player cannot learn a rule they cannot see.
+
+The check asserts the two colours **differ** rather than what they are. Pinned
+to specific values it would fail on a palette tweak and pass on the only change
+that matters: the two collapsing into one.
+
+## Rebinding, and the rule that a key belongs to one action
+
+The title screen could list the bindings but not change them, which is half a
+menu. There is now an options screen — volume and every gameplay key — reached
+from both the title and the pause menu, and it is the same node instanced
+twice rather than written twice.
+
+Its rows are built in code, one per entry in `InputSettings.Rebindable`. A
+scene with eight hand-authored rows would be a second copy of that list, and
+a second copy of the bindings is exactly what was avoided on the title screen
+for the same reason: the copy stops matching and keeps naming the old key.
+
+**Rebinding onto a taken key is refused, not swapped.** A swap looks helpful
+and silently moves a binding the player was not editing. A refusal names what
+is in the way. This is the same rule the title's check enforces on the project
+file, now enforced on anything the player can do by hand — parry and light
+attack sharing mouse-left was not a typo, it was the absence of this rule.
+
+The check reads the binding back **from disk** after a reload, which is the
+half that matters: a rebind can be applied to `InputMap` and never written, and
+nobody finds out until the next launch. Proven by deleting the two lines that
+save it — the reload then reports Space, and the check fails.
 
 ## The project is under version control
 
