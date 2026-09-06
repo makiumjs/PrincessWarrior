@@ -102,19 +102,21 @@ Sixty-one checks, in order:
 26. the camera follows the player and keeps it framed
 27. leaving and re-entering the same checkpoint announces it once, not every time
 28. an enemy that falls out of the level is removed, not left falling forever
-29. a rebuilt room does not re-offer an ability the player already owns
+29. a rebuilt room does not re-offer an ability the player already owns, and
+    no room offers the same ability twice
 30. nothing leaves the X/Y movement plane under movement, jumps, dashes or attacks
-31. the run has an ending: six rooms, one completion, and the save records it
+31. the run has an ending: ten rooms, one completion, and the save records it
 32. ranged enemies are placed, hurt at range, and leave no bolts behind
 33. one enemy type retreats after striking, one holds a stand-off, the default closes
-34. across a whole run every room is populated, all three enemy types appear,
-    and a room torn down under a live bolt leaves none behind
+34. across a whole run every room is populated, every enemy type appears, a
+    room torn down under a live bolt leaves none behind, and the second half
+    of the run holds more enemies than the first
 35. enemies account for real damage to a player who never hits back, and the
     opening room does not kill one who stands still
-36. a reactive bot plays all six rooms of a full run end to end with real
+36. a reactive bot plays all ten rooms of a full run end to end with real
     button presses and reaches each exit trigger
 37. a wall shaft of the size the generator builds can actually be climbed
-38. five of the seven chunk kinds are each clearable alone at full difficulty
+38. five of the chunk kinds are each clearable alone at full difficulty
 39. clips that describe a continuing state loop, on the player and on enemies
 40. a finished run can be restarted, and the save stops claiming it is finished
 41. every checkpoint in the hardest room stands on ground

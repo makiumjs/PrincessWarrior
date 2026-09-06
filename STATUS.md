@@ -929,6 +929,41 @@ generated stream that is not refilled **stops, silently, and stays stopped**,
 which from outside looks like the buffer sitting permanently full. Proven by
 deleting the push: the starvation counter reads 671 in six seconds.
 
+## Three things the longer rooms broke, and one they did not
+
+Tripling the rooms did not introduce these. It made two of them reachable and
+proved the third was never true.
+
+**Five useless crystals on the floor of room 0.** `SpawnAbilityPickups` reads
+what the player owns ONCE, before its loop -- correct while a room held one of
+each obstacle, and its own comment says so: *"so a later room does not litter
+the floor with a second Dash crystal"*. It covers the across-rooms case. The
+tripled layouts hold three DashGaps and three Chimneys, and every one asks for
+its ability, so room 0 laid out **three Dash and two Double Jump**, and room 1
+seven pickups where three would do. Measured exactly that way by reverting the
+fix. The check that already existed for this ("an owned ability is not
+re-offered") now also refuses the same ability twice in one room.
+
+**The back half of the run was as dangerous as the front.** The difficulty ramp
+scaled obstacle SIZE and nothing else, so ten rooms read 4, 5, 8, 4, 5, 8, 4,
+5, 8 enemies -- the layout cycle repeating, not a run getting harder. From the
+halfway room, every other encounter gets a second body. First half 5.5 enemies
+a room, second half 9.2; with the ramp removed, 5.5 against 6.2, which the
+check's 1.2x threshold correctly refuses. The traversal bot still crosses 10 of
+10, in 50 seconds instead of 42.
+
+**And one that was a guess.** The build was one step per frame, and a room went
+from 15 platforms to 46, so the 144ms spike a played run still shows looked
+like the platform step. It is not: slicing that step into twelves left the
+maximum at 144.87ms against 144.65, and disabling the impact bursts left it at
+121ms. Compared against the numbers from before the rooms grew -- 13 to 23
+frames over 33ms in a played run -- **there is no regression**; those spikes
+predate all of this and do not correlate with any gameplay event.
+
+The slicing is kept, with that said plainly. It buys nothing today. What it
+does buy is a bound: twelve platforms per step whatever the room's length,
+where before it was however many the room had.
+
 ## The project is under version control
 
 As of this commit it is a git repository, pushed to GitHub. Until then every

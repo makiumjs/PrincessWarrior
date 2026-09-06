@@ -113,7 +113,29 @@ public partial class EnemyMixTest : Node
             GD.Print($"[MIX] room torn down under a live bolt: {_rebuiltUnderBolt}, bolts left after: {_boltsAfterTeardown}");
             GD.Print($"[MIX] room node count: first {_nodesAtRoom1} -> last {_nodesAtLastRoom}");
 
+            // Does the run get heavier, or does it just get longer? The ramp
+            // scaled obstacle SIZE and nothing else, so a ten-room run read
+            // 4, 5, 8, 4, 5, 8, 4, 5, 8 enemies -- the layout cycle repeating.
+            // The boss room is left out of both halves: it holds one enemy by
+            // design, and counting it would make a heavier back half look
+            // lighter.
+            int front = 0, back = 0, frontRooms = 0, backRooms = 0;
+            int last = _room.RunLength - 1;
+            for (int i = 0; i < _roomsVisited.Count && i < _enemiesPerRoom.Count; i++)
+            {
+                int index = _roomsVisited[i];
+                if (index == last) continue;
+                if (index < _room.RunLength / 2) { front += _enemiesPerRoom[i]; frontRooms++; }
+                else { back += _enemiesPerRoom[i]; backRooms++; }
+            }
+            float frontAvg = frontRooms == 0 ? 0f : (float)front / frontRooms;
+            float backAvg = backRooms == 0 ? 0f : (float)back / backRooms;
+            GD.Print($"[MIX] enemies per room, first half {frontAvg:F1} ({frontRooms} rooms) " +
+                     $"vs second half {backAvg:F1} ({backRooms} rooms)");
+
             bool ok = _typesSeen.Count >= 4
+                   && backRooms > 0 && frontRooms > 0
+                   && backAvg > frontAvg * 1.2f
                    && _roomsVisited.Count >= 3
                    && _emptyRooms == 0
                    && _boltWasInFlight          // a sentry really did fire

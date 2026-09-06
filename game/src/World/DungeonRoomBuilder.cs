@@ -82,6 +82,11 @@ public partial class DungeonRoomBuilder : Node3D
     /// 1.8-wide barrel straddles Z=0 and simply hides the player behind it.
     private const float PropZ = -1.5f;
 
+    /// How much of the room each build step is allowed to do. Both were "all
+    /// of it" until the rooms tripled in length.
+    private const int PlatformsPerStep = 12;
+    private const int BackdropColumnsPerStep = 14;
+
     /// Depth of a platform's front face. BEHIND the play plane, not in front
     /// of it, and the reason is the projection: the camera is orthographic, so
     /// depth does not move anything on screen -- a face at z=+1.5 and one at
@@ -241,18 +246,29 @@ public partial class DungeonRoomBuilder : Node3D
         LastComposedRects = composer.Rects;
         _lastFoundations.Clear();
 
-        yield return () =>
+        // Sliced, not one step. A room was fifteen platforms when this became
+        // "one step per frame"; it is forty-six now, and forty-six platforms
+        // with their foundation courses in a single frame is the 144ms spike a
+        // played run still showed. The number of steps follows the room rather
+        // than being fixed, so a longer room costs more frames instead of
+        // longer ones.
+        for (int start = 0; start < composer.Rects.Count; start += PlatformsPerStep)
         {
-            foreach (var r in composer.Rects)
+            int from = start;
+            yield return () =>
             {
-                // The per-chunk dump used to sit inside the timed loop and
-                // dominated its own measurement: GD.Print to a console costs far
-                // more than placing a platform, so "platforms: 233ms" was mostly
-                // printing. Behind its own flag now.
-                if (LogChunks) GD.Print($"[CHUNK] {r}");
-                PlacePlatform(r);
-            }
-        };
+                int end = Mathf.Min(from + PlatformsPerStep, composer.Rects.Count);
+                for (int i = from; i < end; i++)
+                {
+                    // The per-chunk dump used to sit inside the timed loop and
+                    // dominated its own measurement: GD.Print to a console costs
+                    // far more than placing a platform, so "platforms: 233ms"
+                    // was mostly printing. Behind its own flag now.
+                    if (LogChunks) GD.Print($"[CHUNK] {composer.Rects[i]}");
+                    PlacePlatform(composer.Rects[i]);
+                }
+            };
+        }
 
         yield return () =>
         {
@@ -261,7 +277,16 @@ public partial class DungeonRoomBuilder : Node3D
         };
 
         yield return () => BuildLedgeSupports(composer);
-        yield return () => BuildBackdrop(composer.EndX, composer.MinY, composer.MaxY);
+        // The backdrop is the other bulk step: about fifty wall columns, each
+        // several courses tall now that the courses follow the room's height,
+        // plus a torch every other one.
+        int columns = Mathf.CeilToInt(composer.EndX / Grid) + 1;
+        for (int start = 0; start < columns; start += BackdropColumnsPerStep)
+        {
+            int from = start;
+            yield return () => BuildBackdrop(composer.MinY, composer.MaxY,
+                                             from, Mathf.Min(from + BackdropColumnsPerStep, columns));
+        }
         yield return () => SpawnEncounters(composer);
         yield return () => SpawnCheckpoints(composer);
         yield return () => SpawnAbilityPickups(composer);
@@ -442,6 +467,15 @@ public partial class DungeonRoomBuilder : Node3D
         else if (Save.SaveManager.Instance?.Current != null)
             owned = Save.SaveManager.Instance.Current.UnlockedAbilities;
 
+        // What THIS room has already put down, as well as what the player
+        // already has. The comment above only ever covered the across-rooms
+        // case, and that was enough while a room held one of each obstacle.
+        // The tripled layouts hold three DashGaps and three Chimneys, and
+        // every one of them asks for its ability -- so room 0 laid out three
+        // Dash crystals and three Double Jump crystals, five of them useless
+        // the moment the first was touched.
+        var granted = AbilityFlags.None;
+
         foreach (var (position, abilityName) in composer.AbilityGrants)
         {
             if (!System.Enum.TryParse(abilityName, out AbilityFlags ability))
@@ -449,8 +483,9 @@ public partial class DungeonRoomBuilder : Node3D
                 GD.PushError($"DungeonRoomBuilder: unknown ability '{abilityName}'");
                 continue;
             }
-            if (owned.HasFlag(ability))
+            if (owned.HasFlag(ability) || granted.HasFlag(ability))
                 continue;
+            granted |= ability;
             AddChild(new AbilityPickup { Ability = ability, Position = position });
         }
     }
@@ -545,21 +580,42 @@ public partial class DungeonRoomBuilder : Node3D
                 else if (slot == 3) pick = warlockScene;
             }
             placed++;
-            var enemy = pick.Instantiate<Node3D>();
-            AddChild(enemy);
-            enemy.GlobalPosition = point;
+            PlaceEnemy(pick, point);
 
-            // Told directly, not through two marker nodes and a NodePath. The
-            // markers were created and wired AFTER AddChild, so the enemy's
-            // _Ready had already run and taken the fallback -- and taken it at
-            // the world origin, because the position had not been written
-            // either. Two marker nodes per enemy for a value that never
-            // arrived; this is one call, and it happens after the position is
-            // real.
-            if (enemy is AI.EnemyController controller)
-                controller.SetPatrolPoints(point + new Vector3(-3f, 0f, 0f),
-                                           point + new Vector3(3f, 0f, 0f));
+            // Later rooms put a second body on some of the same ground. The
+            // difficulty ramp scaled obstacle SIZE and nothing else, so the
+            // back half of a ten-room run was as dangerous as the front:
+            // measured at 4, 5, 8, 4, 5, 8, 4, 5, 8 enemies per room, which is
+            // the layout cycle repeating, not a run getting harder.
+            //
+            // Every other encounter, not every one: doubling the whole room
+            // turns a corridor fight into a crowd, and the four types are
+            // built around being met a couple at a time.
+            if (RoomIndex >= RunLength / 2 && placed % 2 == 0)
+            {
+                var second = (RoomIndex + placed) % 2 == 0 && skirmisherScene != null
+                    ? skirmisherScene : meleeScene;
+                PlaceEnemy(second, point + new Vector3(2.6f, 0f, 0f));
+            }
         }
+    }
+
+    /// One enemy, positioned and told where its beat is.
+    private void PlaceEnemy(PackedScene scene, Vector3 point)
+    {
+        var enemy = scene.Instantiate<Node3D>();
+        AddChild(enemy);
+        enemy.GlobalPosition = point;
+
+        // Told directly, not through two marker nodes and a NodePath. The
+        // markers were created and wired AFTER AddChild, so the enemy's _Ready
+        // had already run and taken its fallback -- and taken it at the world
+        // origin, because the position had not been written either. Two marker
+        // nodes per enemy for a value that never arrived; this is one call, and
+        // it happens after the position is real.
+        if (enemy is AI.EnemyController controller)
+            controller.SetPatrolPoints(point + new Vector3(-3f, 0f, 0f),
+                                       point + new Vector3(3f, 0f, 0f));
     }
 
     /// The last room of the run. A property rather than a literal because
@@ -683,7 +739,9 @@ public partial class DungeonRoomBuilder : Node3D
     /// the bottom third of a side-scroller frame is bare background: the camera
     /// sits near the player's height, so everything under the floor line is
     /// visible and empty.
-    private void BuildBackdrop(float endX, float minY, float maxY)
+    /// <param name="fromColumn">First column of the slice, inclusive.</param>
+    /// <param name="toColumn">Last column of the slice, exclusive.</param>
+    private void BuildBackdrop(float minY, float maxY, int fromColumn, int toColumn)
     {
         // Courses enough to cover what the room actually spans. Three fixed
         // courses were right while a room rose 4 to 11 metres; once the rooms
@@ -693,8 +751,7 @@ public partial class DungeonRoomBuilder : Node3D
         // new height.
         int below = 1;
         int above = Mathf.Max(2, Mathf.CeilToInt((maxY - minY) / WallHeight) + 1);
-        int count = Mathf.CeilToInt(endX / Grid) + 1;
-        for (int i = 0; i < count; i++)
+        for (int i = fromColumn; i < toColumn; i++)
         {
             string piece = (i % 4) switch
             {
