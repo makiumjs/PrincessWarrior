@@ -18,6 +18,7 @@ tools/capture/
 # configuration with no secrets in it, and it is the kind of file that is
 # painful to lose and easy to forget. Revisit this if a signing keystore is
 # ever added, which would put a password in it.
+/build/
 game/build/
 game/exports/
 

@@ -25,6 +25,7 @@ public partial class Hud : Control
     private Label _runCompleteBanner;
     private ProgressBar _bossBar;
     private Label _bossLabel;
+    private Label _roomLabel;
 
     public override void _Ready()
     {
@@ -75,6 +76,7 @@ public partial class Hud : Control
         AddChild(_runCompleteBanner);
 
         BuildBossBar();
+        BuildRoomLabel();
 
         if (EventBus.Instance != null)
         {
@@ -85,6 +87,7 @@ public partial class Hud : Control
             EventBus.Instance.CheckpointReached += OnCheckpointReached;
             EventBus.Instance.RunCompleted += OnRunCompleted;
             EventBus.Instance.BossStateChanged += OnBossStateChanged;
+            EventBus.Instance.RoomEntered += OnRoomEntered;
             EventBus.Instance.LevelTransitionRequested += (_, _) =>
             {
                 if (_runCompleteBanner != null) _runCompleteBanner.Visible = false;
@@ -102,6 +105,7 @@ public partial class Hud : Control
             EventBus.Instance.AbilityUnlocked -= OnAbilityUnlocked;
             EventBus.Instance.CheckpointReached -= OnCheckpointReached;
             EventBus.Instance.BossStateChanged -= OnBossStateChanged;
+            EventBus.Instance.RoomEntered -= OnRoomEntered;
         }
 
         if (_checkpointTimer != null)
@@ -233,6 +237,39 @@ public partial class Hud : Control
                 : new Color(0.95f, 0.78f, 0.30f),    // open: spend the window
         };
         _bossBar.AddThemeStyleboxOverride("fill", fill);
+    }
+
+    /// Where you are in the run. Worth the pixels only since the run became
+    /// ten rooms of 200 metres: at two minutes you keep count yourself.
+    private void BuildRoomLabel()
+    {
+        _roomLabel = new Label
+        {
+            Name = "RoomLabel",
+            Text = "",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            MouseFilter = MouseFilterEnum.Ignore,
+        };
+        _roomLabel.SetAnchorsPreset(LayoutPreset.TopRight);
+        _roomLabel.AnchorLeft = 1f;
+        _roomLabel.AnchorRight = 1f;
+        _roomLabel.OffsetLeft = -170f;
+        _roomLabel.OffsetRight = -18f;
+        _roomLabel.OffsetTop = 16f;
+        _roomLabel.OffsetBottom = 38f;
+        _roomLabel.AddThemeColorOverride("font_color", new Color(0.86f, 0.80f, 0.68f));
+        _roomLabel.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.85f));
+        _roomLabel.AddThemeConstantOverride("outline_size", 6);
+        AddChild(_roomLabel);
+    }
+
+    private void OnRoomEntered(int index, int total)
+    {
+        if (_roomLabel == null) return;
+        // The last room is named rather than numbered: "10 of 10" and "the
+        // Warden" are the same fact, and only one of them tells you to be
+        // ready for it.
+        _roomLabel.Text = index >= total - 1 ? "THE WARDEN" : $"Room {index + 1} of {total}";
     }
 
     private void UpdateHealthLabel()

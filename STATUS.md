@@ -30,7 +30,7 @@ first three rooms and is at maximum for the last three.
 
 ## What is proven, and by what
 
-`bash tools/verify.sh` — 58 checks, currently all green, and green on the last
+`bash tools/verify.sh` — 59 checks, currently all green, and green on the last
 sixteen consecutive full runs. Two runs before those failed the engine-quiet check (
 errors) immediately after a rebuild and have not reproduced since; the gate now
 saves the evidence to `tools/.engine-errors.log` when that check fires, because
@@ -839,6 +839,40 @@ corpse 3.23 seconds into a 4.40-second cleanup, working exactly as designed.
 - **`AddChild` without `forceReadableName` renames a colliding child to
   `@GapTorch@2`.** Three torches placed, one found by a name-prefix lookup. A
   group is rename-proof and is what the check uses now.
+
+## The game exists as a program now
+
+`bash tools/export.sh` produces `build/windows/PrincessWarrior.exe` -- 185 MB,
+double-clickable, no editor required. Until this it ran only from the editor
+binary, which meant nobody who was not sitting at this machine had ever seen
+it.
+
+**The export had been failing silently for as long as it existed**, and how it
+failed is the part worth keeping. Godot's .NET export needs a
+`LostCrownlike.sln` next to the `.csproj`. This project was always built with
+`dotnet build` on the csproj directly, so no solution was ever created -- and
+without one Godot still **wrote an exe and a pck**. That binary launched,
+showed nothing, exited 0, and the equivalent debug build crashed with
+**signal 11**: the assemblies had never been published.
+
+So the check does not read the export command's exit code. It asserts that
+`LostCrownlike.dll` is in the output, and that the binary starts with its C#
+autoloads running -- `AudioManager: ready, 8 voices allocated` is printed from
+managed code, so its presence is proof the runtime came up rather than proof
+the engine did.
+
+A second trap, recorded because the message points the wrong way: the export
+path's directory must already exist, and Godot reports that as *"the specified
+export path does not exist"*, which reads as a bad path rather than a missing
+folder.
+
+Two things the export cannot check, and does not pretend to: the release and
+debug templates both refuse a scene path on the command line, so the exported
+binary can only be started at its title screen. Driving it through a run needs
+a person.
+
+The templates themselves are ~1.2 GB and are **not** in the repository; the
+header of `tools/export.sh` has the three commands that install them.
 
 ## The project is under version control
 

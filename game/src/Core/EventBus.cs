@@ -67,6 +67,12 @@ public partial class EventBus : Node
     /// The player asked to start over from the pause menu.
     [Signal] public delegate void RestartRequestedEventHandler();
 
+    /// A room finished building. Carries which one and how many there are, so
+    /// the HUD can say where you are without knowing what a room is. It became
+    /// worth saying when a run went from six rooms of 70 metres to ten of 200:
+    /// at two minutes you remember; at twelve you do not.
+    [Signal] public delegate void RoomEnteredEventHandler(int index, int total);
+
     /// The boss's state, for the HUD to draw. Flattened to primitives for the
     /// same reason as PlayerDamaged, and routed through the bus rather than
     /// letting the HUD find the boss: the HUD's one architectural rule is that
@@ -100,6 +106,9 @@ public partial class EventBus : Node
         EmitSignal(SignalName.LevelTransitionRequested, scenePath, spawnPointId);
 
     public void EmitRestartRequested() => EmitSignal(SignalName.RestartRequested);
+
+    public void EmitRoomEntered(int index, int total) =>
+        EmitSignal(SignalName.RoomEntered, index, total);
 
     public void EmitBossStateChanged(bool alive, float healthFraction, bool armoured, bool enraged) =>
         EmitSignal(SignalName.BossStateChanged, alive, healthFraction, armoured, enraged);

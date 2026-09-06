@@ -258,6 +258,7 @@ public partial class DungeonRoomBuilder : Node3D
         yield return () => SpawnArenaGates(composer);
         yield return () => SpawnExit(composer);
         yield return FlushBatches;
+        yield return () => Core.EventBus.Instance?.EmitRoomEntered(RoomIndex, RunLength);
     }
 
     /// One chunk, flanked by flat ground, at the hardest setting the ramp ever
