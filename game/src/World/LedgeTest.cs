@@ -53,26 +53,6 @@ public partial class LedgeTest : Node
         }
     }
 
-    /// The room builder creates patrol markers as plain Marker3D children;
-    /// the one ahead of the enemy is what pulls it toward the edge.
-    private static Marker3D FindFarthestMarker(Node from, Vector3 near)
-    {
-        Marker3D best = null;
-        float bestDist = float.MaxValue;
-        Walk(from);
-        return best;
-
-        void Walk(Node n)
-        {
-            if (n is Marker3D m)
-            {
-                float d = Mathf.Abs(m.GlobalPosition.X - near.X);
-                if (d < bestDist) { bestDist = d; best = m; }
-            }
-            foreach (var c in n.GetChildren()) Walk(c);
-        }
-    }
-
     private static System.Collections.Generic.List<CharacterBody3D> FindEnemies(Node from)
     {
         var list = new System.Collections.Generic.List<CharacterBody3D>();
