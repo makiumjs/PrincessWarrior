@@ -36,6 +36,7 @@ game is now, every measured number, and the three decisions waiting on you.
 | `STATUS.md` | Current state, measurements, and the open decisions |
 | `ARCHITECTURE.md` | **The contract.** Subsystem boundaries, event vocabulary, shared types, and every deviation with the measurement that justified it |
 | `PROMPT.md` | The original brief the project was built against |
+| `docs/engineering-log.md` | Every defect found, in order, with what it measured |
 | `docs/critic-log/` | Review rounds, with scores and the evidence behind them |
 | `tools/` | Vendored Godot |
 | `assets_src/` | Unmodified asset-pack downloads, kept so imports can be redone |
