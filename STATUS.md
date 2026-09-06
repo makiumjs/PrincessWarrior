@@ -1057,8 +1057,23 @@ player.
 
 ## What is genuinely open
 
-- **Tuning by feel.** The parry's 0.14s perfect window, six rooms, the
-  difficulty ramp -- all defensible on paper, none confirmed by playing.
+- **Tuning by feel, and it is now the only thing left that a check cannot
+  reach.** The parry's 0.14s perfect window; whether ten rooms of two hundred
+  metres is the right length or twice too much; whether four to eight enemies a
+  room is a fight or a chore; whether the boss's 120 health and 1.6-second
+  opening make a duel or a war of attrition. Every one of these is defensible
+  on paper and none of them is confirmed by anyone playing. A deliberately
+  clumsy bot proves a room can be crossed; it cannot tell you whether crossing
+  it was any good.
+
+- **Visual fidelity, at 6 of 10 against the game this is modelled on.** What
+  separates it now is art direction rather than code: no particles beyond the
+  impact bursts, no weather, kit assets rather than authored art, and a generic
+  run cycle rather than a character whose walk says something about them.
+
+- **The chimney can be climbed without the ability it teaches** -- on wall
+  jumps, because the sides of its ledges are climbable. Measured, not fixed:
+  whether that is a flaw or a shortcut worth leaving in is a design call.
 
 
 ## The gate was audited against itself
