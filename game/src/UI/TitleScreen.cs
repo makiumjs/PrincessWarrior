@@ -162,10 +162,46 @@ public partial class TitleScreen : Control
                         _ => $"Mouse {(int)m.ButtonIndex}",
                     });
                     break;
+                // The pad, derived like everything else on this list. It was
+                // added after the keyboard and this method did not know about
+                // it, so the title told a player with a controller in their
+                // hands that the game wanted a keyboard.
+                case InputEventJoypadButton j:
+                    parts.Add(PadButtonName(j.ButtonIndex));
+                    break;
+                case InputEventJoypadMotion a when a.Axis == JoyAxis.LeftX:
+                    parts.Add(a.AxisValue < 0 ? "Stick left" : "Stick right");
+                    break;
+                case InputEventJoypadMotion a:
+                    parts.Add(a.Axis == JoyAxis.TriggerLeft ? "LT" :
+                              a.Axis == JoyAxis.TriggerRight ? "RT" : $"Axis {(int)a.Axis}");
+                    break;
             }
         }
         return string.Join(" / ", parts);
     }
+
+    /// Xbox names, because they are the ones printed on most pads sold and a
+    /// player reading "Button 2" has to go and find out.
+    ///
+    /// The four face buttons carry a "Pad" prefix and the shoulders and stick
+    /// do not, because only the face buttons collide: the first version listed
+    /// "A / Left / Stick left  Move" and "Space / A  Jump", where the two A's
+    /// are a keyboard key and a pad button meaning different things.
+    private static string PadButtonName(JoyButton b) => b switch
+    {
+        JoyButton.A => "Pad A",
+        JoyButton.B => "Pad B",
+        JoyButton.X => "Pad X",
+        JoyButton.Y => "Pad Y",
+        JoyButton.Back => "Pad Back",
+        JoyButton.Start => "Pad Start",
+        JoyButton.LeftShoulder => "LB",
+        JoyButton.RightShoulder => "RB",
+        JoyButton.DpadLeft => "D-pad left",
+        JoyButton.DpadRight => "D-pad right",
+        _ => $"Pad {(int)b}",
+    };
 
     /// The bindings are stored as PHYSICAL keycodes, so a stored value names a
     /// position on the keyboard, not a letter. Translating it through the
