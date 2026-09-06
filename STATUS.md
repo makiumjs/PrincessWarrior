@@ -30,7 +30,7 @@ first three rooms and is at maximum for the last three.
 
 ## What is proven, and by what
 
-`bash tools/verify.sh` — 60 checks, currently all green, and green on the last
+`bash tools/verify.sh` — 61 checks, currently all green, and green on the last
 sixteen consecutive full runs. Two runs before those failed the engine-quiet check (
 errors) immediately after a rebuild and have not reproduced since; the gate now
 saves the evidence to `tools/.engine-errors.log` when that check fires, because
@@ -903,6 +903,31 @@ One failure in it was the check's own: it asserted "Continue is hidden" against
 a save that still had four rooms in it, because the scene's title node ran its
 `_Ready` before the test could reset. It resets first and builds a fresh title
 now -- which is also what relaunching the game does.
+
+## Twelve minutes of one held chord is a hum, not a score
+
+The dungeon had a drone -- deliberately dull, and right for what it is, which
+is a room tone. It was written when a run was two minutes. At twelve it reads
+as the game being unfinished rather than as the game being quiet.
+
+There is a generated score now, on the same terms as everything else in this
+project: no sample files, its own voice so the gameplay pool is never spent on
+it, and quieter than the sword. A slow minor figure over a pad, walking the
+scale rather than arpeggiating a chord -- a repeating arpeggio is most of what
+makes generated music sound generated. Tempo and pad both follow how far the
+run has got, and the boss drops the root and beats the pad harder.
+
+**Checking that it moved found that it barely did.** The walk clamped to the
+ends of its scale, and it started at degree 0, so every downward step was
+truncated back to the bottom note: six seconds produced **two distinct
+pitches**. Reflecting at the ends instead, and starting in the middle, gives
+four to five across three runs. The clamp made the check flaky as well as the
+music dull -- "at least three pitches" was a coin flip.
+
+The check's first claim is the one a "there is audio" test would skip: a
+generated stream that is not refilled **stops, silently, and stays stopped**,
+which from outside looks like the buffer sitting permanently full. Proven by
+deleting the push: the starvation counter reads 671 in six seconds.
 
 ## The project is under version control
 
