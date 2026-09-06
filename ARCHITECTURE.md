@@ -240,6 +240,33 @@ EventBus events — no new event vocabulary. Verified end to end: checkpoint at
 `AudioManager.cs` autoload. Procedural SFX via `AudioStreamGenerator`
 (no sample files) triggered by `EventBus` signals (jump, dash, hit, land).
 
+**Recorded atmosphere, and the one place PROMPT.md's "no external asset files"
+no longer holds.** It had already stopped holding for art, which is KayKit.
+`game/assets/audio/` carries seven CC0 Vorbis tracks and `AudioManager` plays
+them in two tiers:
+
+- **The bed** says which ACT you are in -- `BedForRoom` divides the run into
+  thirds, so the mapping survives `RunLength` being retuned, and `RunLength` has
+  already moved once. `boss_theme` outranks the act while the Warden lives.
+- **The layer**, quieter, says what the ROOM is: `RoomShape` classifies a room's
+  vertical rise against the player's own jump (`DungeonRoomBuilder.ShapeOf`) and
+  Audio maps the resulting word to a file. Audio therefore needs to know nothing
+  about level geometry, and World needs to know nothing about audio.
+
+The synthesised drone stands down while a bed plays -- two continuous sources on
+one bus is mud, and the drone was always standing in for this. It is still fed
+with silence, because an `AudioStreamGenerator` whose buffer is never drained
+reads as starved to check 48. The drips stay: they are events, and they are what
+keeps a bed from being wallpaper. The procedural MELODY stays too, because it is
+the part that answers to the run -- intensity rises room by room -- and a
+recording cannot.
+
+Bed streams load with `ResourceLoader.CacheMode.Ignore`. Cached, they outlive
+the players that release them and the engine reports "1 resources still in use
+at exit" -- measured 3 boots of 3 with beds on, 0 of 3 with them off, and
+clearing the player's `Stream` in `_ExitTree` did not touch it, because the
+cache was the owner.
+
 ### ProceduralArt — `src/ProceduralArt/`
 `ProceduralMeshFactory.cs`: builds character and environment geometry at
 load time via `ArrayMesh`/`SurfaceTool`. Materials via `.gdshader` files
@@ -280,6 +307,9 @@ call `Core.IDamageable.TakeDamage`.
 | `AbilityUnlocked` | `AbilityFlags ability` | World | PlayerCamera, UI, Save |
 | `CheckpointReached` | `string checkpointId` | World | Save, UI |
 | `LevelTransitionRequested` | `string scenePath, string spawnPointId` | World | Core (scene loader) |
+| `RoomEntered` | `int index, int total` | World | UI, Audio |
+| `BossStateChanged` | `bool alive, float healthFraction, bool armoured, bool enraged` | AI | UI, Audio |
+| `RoomShape` | `string shape` -- "flat", "open" or "climb" | World | Audio |
 
 ## Shared types (`Core/`)
 
@@ -352,6 +382,7 @@ hand-guessed distance.
   | `WallShaft` | wall-sliding up a narrow shaft | WallJump |
   | `Arena` | a fight, not a traversal | ChargeAttack |
   | `Spikes` | jumping over a trap on solid ground | — |
+  | `Drop` | nothing; a single step DOWN, free to cross | — |
 
   Each chunk that needs an ability places the pickup immediately before
   itself, so the obstacle teaches the ability it gates.
@@ -420,7 +451,7 @@ signals or rot, but the code is not lost.
 ## The run is finite, and one signal says so
 
 `ComposeRoom` picks a layout with `index % 3`, which by itself never stops.
-`RoomExitTrigger` now compares `NextRoomIndex` against `RunLength` (6) and, at
+`RoomExitTrigger` now compares `NextRoomIndex` against `RunLength` (10) and, at
 the end, emits `RunCompleted` **instead of** requesting a transition, so
 nothing rebuilds underneath the ending.
 
@@ -438,10 +469,30 @@ does not move the ending further away. Recording the current index instead
 would mean a player who died in room 5 would have to clear rooms 4 and 5 again
 to reach the same total.
 
-`RunLength` is an `[Export]` on `DungeonRoomBuilder`, forwarded to each exit it
-spawns. Six is chosen from the difficulty curve, not from feel: the ramp in
-`ComposeRoom` saturates at index 3, so six gives three rooms of build-up, three
-at full difficulty, and each of the three layouts twice.
+`RunLength` is an `[Export]` on `DungeonRoomBuilder`, forwarded to each exit at
+`SpawnExit`. `RoomExitTrigger` declares its own default of 6, which is a
+fallback for a hand-placed exit only: every exit the builder creates has the
+field overwritten from the builder's value, so 10 is the number that ships.
+
+**Ten, and it was six.** Six was chosen from the difficulty curve when a room
+was one movement of eight chunks and 64-72 metres -- a run of two to three
+minutes, which is a demo rather than a game. Rooms now run three movements and
+191-211 metres each, and the ramp was stretched to match. Three things set the
+count, none of them feel:
+
+- **The ramp.** `Difficulty = Min(0.5 + index * 0.07, 1)` opens at 0.50, reaches
+  0.99 at room 7 and clamps from room 8. At the old slope it hit full difficulty
+  at room 3, which over ten rooms would have meant seven identical ones.
+- **The ability gate.** `Allowed(kind, index)` downgrades a chunk the player
+  cannot yet answer: `Chimney` below room 1, `DashGap` below 2, `Arena` below 3,
+  `WallShaft` below 4. A six-room run would leave two rooms in which the full
+  movement kit is ever asked for.
+- **The boss.** `IsBossRoom => RoomIndex == RunLength - 1`, so the last room is
+  the Warden and the count has to leave a run in front of it.
+
+Ten rooms over three layouts means layout 0 is seen four times and layouts 1 and
+2 three times each -- repetition the layouts themselves do not yet answer, and
+the largest open item on the level design.
 
 Capping the run risked hollowing out the tests that walk many rooms, which is
 the vacuous-pass class this project has already been bitten by three times.

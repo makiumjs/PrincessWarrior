@@ -84,6 +84,7 @@ public partial class EnemyController : CharacterBody3D, IDamageable
     /// Set when _Ready found no patrol markers, so the default patrol has to be
     /// measured from wherever the spawner finally puts this enemy.
     private bool _patrolFallbackPending;
+    private bool _patrolPointsExplicitlySet;
     private float _navRetryTimer;
     private Vector3 _steerTarget;
     private float _attackCooldownRemaining;
@@ -134,17 +135,7 @@ public partial class EnemyController : CharacterBody3D, IDamageable
         // no matter where it stood. Invisible while a room was 64 metres and
         // the enemies were near the start; at 200 metres they set off across
         // the level and three of them walked out of the world in one run.
-        if (PatrolPointA != null && PatrolPointB != null)
-        {
-            _patrolTargetA = PatrolPointA.GlobalPosition;
-            _patrolTargetB = PatrolPointB.GlobalPosition;
-            _patrolTargetA.Z = _lockedZ;
-            _patrolTargetB.Z = _lockedZ;
-        }
-        else
-        {
-            _patrolFallbackPending = true;
-        }
+        _patrolFallbackPending = true;
 
         // NavigationServer3D only syncs navigation maps at the END of a physics
         // frame. A path queried before that first sync comes back degenerate —
@@ -173,8 +164,18 @@ public partial class EnemyController : CharacterBody3D, IDamageable
         if (_patrolFallbackPending)
         {
             _patrolFallbackPending = false;
-            SetPatrolPoints(GlobalPosition + Vector3.Left * 3f,
-                            GlobalPosition + Vector3.Right * 3f);
+            if (!_patrolPointsExplicitlySet)
+            {
+                if (PatrolPointA != null && PatrolPointB != null)
+                {
+                    SetPatrolPoints(PatrolPointA.GlobalPosition, PatrolPointB.GlobalPosition);
+                }
+                else
+                {
+                    SetPatrolPoints(GlobalPosition + Vector3.Left * 3f,
+                                    GlobalPosition + Vector3.Right * 3f);
+                }
+            }
         }
 
         if (State != EnemyState.Dead && GlobalPosition.Y < FallDeathY)
@@ -712,6 +713,7 @@ public partial class EnemyController : CharacterBody3D, IDamageable
     /// </summary>
     public void SetPatrolPoints(Vector3 a, Vector3 b, bool headToB = false)
     {
+        _patrolPointsExplicitlySet = true;
         _patrolTargetA = a;
         _patrolTargetB = b;
         _patrolTargetA.Z = _lockedZ;

@@ -20,6 +20,7 @@ public partial class OptionsMenu : Control
 
     private readonly Dictionary<string, Button> _rows = new();
     private Label _message;
+    private Control _firstControl;
     private string _listeningFor = "";
 
     public override void _Ready()
@@ -30,6 +31,21 @@ public partial class OptionsMenu : Control
         InputSettings.EnsureApplied();
         Build();
         Refresh();
+
+        // Both openers just set Visible -- the title screen and the pause menu.
+        // Hooking the signal here rather than asking each of them to grab focus
+        // keeps the rule in one place: whoever shows this panel, a pad can
+        // drive it. Without a focused Control, ui_up/ui_down have nothing to
+        // move from and the D-pad silently walks the buttons of the menu
+        // UNDERNEATH this one, which are hidden behind it.
+        VisibilityChanged += OnVisibilityChanged;
+    }
+
+    public override void _ExitTree() => VisibilityChanged -= OnVisibilityChanged;
+
+    private void OnVisibilityChanged()
+    {
+        if (Visible) _firstControl?.GrabFocus();
     }
 
     private void Build()
@@ -68,6 +84,28 @@ public partial class OptionsMenu : Control
         };
         slider.ValueChanged += v => InputSettings.SetMasterVolume((float)v);
         volRow.AddChild(slider);
+        // Reading order, so ui_down walks the panel top to bottom. A slider
+        // takes ui_left/ui_right for its own value and passes up/down through,
+        // so starting here costs no navigation.
+        _firstControl = slider;
+
+        var glowRow = new HBoxContainer();
+        glowRow.AddThemeConstantOverride("separation", 12);
+        col.AddChild(glowRow);
+        glowRow.AddChild(new Label { Text = "Glow / Bloom", CustomMinimumSize = new Vector2(190, 0) });
+        var glowBtn = new CheckButton
+        {
+            Name = "GlowToggle",
+            ButtonPressed = InputSettings.GlowEnabled,
+            Text = InputSettings.GlowEnabled ? "On" : "Off",
+            CustomMinimumSize = new Vector2(190, 26),
+        };
+        glowBtn.Toggled += on =>
+        {
+            InputSettings.SetGlow(on);
+            glowBtn.Text = on ? "On" : "Off";
+        };
+        glowRow.AddChild(glowBtn);
 
         col.AddChild(new HSeparator());
 

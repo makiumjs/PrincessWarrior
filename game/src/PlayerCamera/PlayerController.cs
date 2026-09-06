@@ -533,6 +533,9 @@ public partial class PlayerController : CharacterBody3D, IDamageable
         {
             bool perfect = parry == Combat.CombatController.ParryResult.Perfect;
 
+            // Hit-stop freeze on parry: 120ms for perfect parry, 50ms for regular block
+            _combat?.TriggerHitStop(perfect ? 120 : 50);
+
             // An ordinary parry still shoves: it costs ground, which is what
             // makes the perfect one worth aiming for.
             if (!perfect)
@@ -554,6 +557,36 @@ public partial class PlayerController : CharacterBody3D, IDamageable
                 reach: perfect ? 1.15f : 0.6f,
                 life: perfect ? 0.32f : 0.20f);
             return;
+        }
+
+        // Failure feedback (Item 03 of Craft Plan):
+        // If the player pressed parry right around the blow (late press):
+        // a dull clang and grey spark.
+        // If the player pressed parry too early (guard lapsed before impact):
+        // a short whiff.
+        if (_combat != null && GetParent() != null)
+        {
+            if (_combat.TimeSinceLastParryPress < 0.18f)
+            {
+                // Late press: dull grey spark
+                Combat.ImpactBurst.Spawn(
+                    GetParent(),
+                    GlobalPosition + new Vector3(FacingSign * 0.4f, 0.2f, 0f),
+                    new Color(0.52f, 0.53f, 0.56f),
+                    reach: 0.45f,
+                    life: 0.16f);
+            }
+            else if (_combat.ParryCooldownRemaining > 0.05f && _combat.TimeSinceLastParryPress < (_combat.ParryWindowMs + 200f) / 1000f)
+            {
+                // Early press: light whiff
+                Combat.ImpactBurst.Spawn(
+                    GetParent(),
+                    GlobalPosition + new Vector3(FacingSign * 0.3f, 0.1f, 0f),
+                    new Color(0.78f, 0.82f, 0.88f, 0.4f),
+                    reach: 0.3f,
+                    life: 0.12f,
+                    flatten: 0.3f);
+            }
         }
 
         CurrentHealth = Mathf.Max(0, CurrentHealth - info.Amount);

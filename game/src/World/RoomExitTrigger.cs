@@ -29,6 +29,12 @@ public partial class RoomExitTrigger : Area3D
     private MeshInstance3D _seal;
     private int _recheckFrames;
 
+    private const string AssetDir = "res://assets/kaykit/dungeon/";
+    private MeshInstance3D _portalVortex;
+    private StandardMaterial3D _portalMaterial;
+    private OmniLight3D _portalBeacon;
+    private float _portalTime;
+
     public override void _Ready()
     {
         CollisionLayer = 0;
@@ -36,7 +42,145 @@ public partial class RoomExitTrigger : Area3D
         Monitoring = true;
         BodyEntered += OnBodyEntered;
 
+        BuildGatewayVisuals();
         if (SealedUntilBossDies) BuildSeal();
+    }
+
+    public override void _Process(double delta)
+    {
+        _portalTime += (float)delta;
+        float pulse = 0.85f + 0.15f * Mathf.Sin(_portalTime * 3.2f);
+        if (_portalMaterial != null)
+            _portalMaterial.EmissionEnergyMultiplier = 2.8f * pulse;
+        if (_portalBeacon != null)
+            _portalBeacon.LightEnergy = 2.8f * pulse;
+    }
+
+    private void BuildGatewayVisuals()
+    {
+        // 1. Imposing Stone Archway
+        var archScene = GD.Load<PackedScene>($"{AssetDir}wall_doorway.gltf");
+        if (archScene != null)
+        {
+            var arch = archScene.Instantiate<Node3D>();
+            arch.Position = new Vector3(0f, -1.2f, -0.4f);
+            StripDoor(arch);
+            AddChild(arch);
+        }
+
+        // 2. Flanking Stone Columns
+        var columnScene = GD.Load<PackedScene>($"{AssetDir}column.gltf");
+        if (columnScene != null)
+        {
+            var colL = columnScene.Instantiate<Node3D>();
+            colL.Position = new Vector3(-1.8f, -1.2f, -0.2f);
+            AddChild(colL);
+
+            var colR = columnScene.Instantiate<Node3D>();
+            colR.Position = new Vector3(1.8f, -1.2f, -0.2f);
+            AddChild(colR);
+        }
+
+        // 3. Wall Torches flanking the portal
+        var torchScene = GD.Load<PackedScene>($"{AssetDir}torch_mounted.gltf");
+        if (torchScene != null)
+        {
+            var torchL = torchScene.Instantiate<Node3D>();
+            torchL.Position = new Vector3(-1.6f, 0.4f, 0.1f);
+            torchL.AddChild(new TorchFlicker
+            {
+                Position = new Vector3(0f, 0.35f, 0.5f),
+                LightColor = new Color(1f, 0.72f, 0.42f),
+                BaseEnergy = 2.4f,
+                OmniRange = 6.0f,
+                ShadowEnabled = false,
+            });
+            AddChild(torchL);
+
+            var torchR = torchScene.Instantiate<Node3D>();
+            torchR.Position = new Vector3(1.6f, 0.4f, 0.1f);
+            torchR.AddChild(new TorchFlicker
+            {
+                Position = new Vector3(0f, 0.35f, 0.5f),
+                LightColor = new Color(1f, 0.72f, 0.42f),
+                BaseEnergy = 2.4f,
+                OmniRange = 6.0f,
+                ShadowEnabled = false,
+            });
+            AddChild(torchR);
+        }
+
+        // 4. Twin Royal Banners
+        var bannerScene = GD.Load<PackedScene>($"{AssetDir}banner_red.gltf");
+        if (bannerScene != null)
+        {
+            SpawnBanner(bannerScene, new Vector3(-1.95f, 1.0f, -0.1f));
+            SpawnBanner(bannerScene, new Vector3(1.95f, 1.0f, -0.1f));
+        }
+
+        // 5. Dimensional Portal Veil
+        bool isFinalExit = NextRoomIndex >= RunLength;
+        Color portalColor = isFinalExit
+            ? new Color(1f, 0.85f, 0.3f, 0.7f)
+            : new Color(0.2f, 0.8f, 1f, 0.7f);
+        Color emissionColor = isFinalExit
+            ? new Color(1f, 0.82f, 0.25f)
+            : new Color(0.3f, 0.88f, 1f);
+
+        _portalMaterial = new StandardMaterial3D
+        {
+            AlbedoColor = portalColor,
+            EmissionEnabled = true,
+            Emission = emissionColor,
+            EmissionEnergyMultiplier = 2.8f,
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+        };
+
+        _portalVortex = new MeshInstance3D
+        {
+            Name = "PortalVortex",
+            Position = new Vector3(0f, 0.2f, -0.1f),
+            Mesh = new BoxMesh { Size = new Vector3(1.65f, 2.75f, 0.12f) },
+            MaterialOverride = _portalMaterial,
+        };
+        AddChild(_portalVortex);
+
+        // 6. Portal Beacon Light
+        _portalBeacon = new OmniLight3D
+        {
+            Name = "PortalBeacon",
+            Position = new Vector3(0f, 0.3f, 0.2f),
+            LightColor = isFinalExit ? new Color(1f, 0.85f, 0.4f) : new Color(0.35f, 0.88f, 1f),
+            LightEnergy = 2.8f,
+            OmniRange = 10.0f,
+            ShadowEnabled = false,
+        };
+        AddChild(_portalBeacon);
+    }
+
+    private static void StripDoor(Node node)
+    {
+        for (int i = node.GetChildCount() - 1; i >= 0; i--)
+        {
+            var child = node.GetChild(i);
+            if (child.Name.ToString().StartsWith("wall_doorway_door"))
+            {
+                child.QueueFree();
+            }
+            else
+            {
+                StripDoor(child);
+            }
+        }
+    }
+
+    private void SpawnBanner(PackedScene scene, Vector3 at)
+    {
+        var pivot = new BannerSway { Position = at };
+        AddChild(pivot);
+        var banner = scene.Instantiate<Node3D>();
+        banner.Position = new Vector3(0f, -0.6f, 0f);
+        pivot.AddChild(banner);
     }
 
     /// A door the player cannot pass and cannot see is a bug report. The seal
@@ -48,16 +192,26 @@ public partial class RoomExitTrigger : Area3D
         _seal = new MeshInstance3D
         {
             Name = "ExitSeal",
-            Mesh = new BoxMesh { Size = new Vector3(0.35f, 3.4f, 1.9f) },
+            Position = new Vector3(0f, 0.2f, 0.05f),
+            Mesh = new BoxMesh { Size = new Vector3(1.7f, 2.85f, 0.25f) },
             MaterialOverride = new StandardMaterial3D
             {
-                AlbedoColor = new Color(0.85f, 0.25f, 0.18f, 0.55f),
+                AlbedoColor = new Color(0.9f, 0.15f, 0.12f, 0.8f),
                 EmissionEnabled = true,
-                Emission = new Color(0.9f, 0.3f, 0.15f),
-                EmissionEnergyMultiplier = 1.6f,
+                Emission = new Color(1f, 0.2f, 0.1f),
+                EmissionEnergyMultiplier = 3.6f,
                 Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             },
         };
+        var sealLight = new OmniLight3D
+        {
+            Name = "SealLight",
+            LightColor = new Color(1f, 0.2f, 0.1f),
+            LightEnergy = 3.2f,
+            OmniRange = 8.5f,
+            ShadowEnabled = false,
+        };
+        _seal.AddChild(sealLight);
         AddChild(_seal);
     }
 

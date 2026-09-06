@@ -226,27 +226,15 @@ public sealed class MicroChunkComposer
             case ChunkKind.Chimney:
             {
                 RequireAbility("DoubleJump");
-                // Alternating ledges climbing a shaft, each one jump apart.
                 const int steps = 3;
-                float step = _m.SafeChimneyStep * intensity;
-                float ledge = _m.ChimneyLedgeWidth;
+                float step = Mathf.Clamp(_m.SafeStepUp * intensity, 1.3f, 1.8f);
+                float ledge = 4f;
                 Emit(ledge);
                 for (int i = 0; i < steps; i++)
                 {
                     _cursorY += step;
-                    // Zig-zag horizontally so the climb needs real inputs, but
-                    // never further than a standing jump can carry.
-                    // A staircase, not a zig-zag. Alternating left and right
-                    // cleared the stacking but asked the player to reverse
-                    // direction mid-climb in a level that runs left to right;
-                    // stepping consistently forward does the same job and reads
-                    // as progress. Measured: the alternating version dropped the
-                    // traversal bot from three layouts crossed to one.
-                    _cursorX += _m.ChimneyStagger;
-                    _rects.Add(new PlatformRect(_cursorX, _cursorY, ledge));
-                    Track(_cursorY);
+                    Emit(ledge);
                 }
-                _cursorX += ledge;
                 break;
             }
         }

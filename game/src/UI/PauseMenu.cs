@@ -69,6 +69,13 @@ public partial class PauseMenu : Control
         bool paused = !GetTree().Paused;
         GetTree().Paused = paused;
         Visible = paused;
+
+        // Godot's D-pad menu navigation moves focus FROM a focused Control, so
+        // a menu that opens with nothing focused cannot be driven by a pad at
+        // all -- the only GrabFocus here used to be on the way back from
+        // Options, so the pad worked in this menu only after a mouse had
+        // opened Options and closed it again.
+        if (paused) _resumeButton.GrabFocus();
     }
 
     private void OnResumePressed()

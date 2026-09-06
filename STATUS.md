@@ -14,11 +14,15 @@ a title screen: **New run**, **Continue** when a save has progress in it,
 **Options** with key rebinding and volume, and Quit. The controls are listed on
 the title from the live InputMap rather than typed out, so they cannot go stale.
 
-Past it is a 2.5D action-platformer. A stone dungeon corridor lit by flickering
-torches, with parallax layers receding behind it and a course of stone under
-every walkable surface, so a hole in the floor reads as a hole rather than as
-the end of the level. You control a rigged character with a sword, starting
-with **no abilities**.
+Past it is a 2.5D action-platformer spanning a 3-act architectural progression
+(Act I Forgotten Crypts in warm limestone amber, Act II Sunken Catacombs in mossy
+teal, Act III Warden's Sanctum in dark obsidian amethyst). A stone dungeon corridor lit
+by flickering torches, with parallax layers receding behind it, grounded support columns
+under elevated walkways, and a course of stone under every walkable surface.
+Checkpoints are sculpted stone shrines with floating resonant crystals, and room exits
+are clear monumental stone arches bearing pulsing dimensional vortex portals (sealed
+by a crimson barrier in the boss room until the Warden falls). You control a rigged
+character with a sword, starting with **no abilities**.
 
 You run, jump, fight, take damage from spike traps, bank checkpoints, die and
 respawn at the last one. Enemies come in four kinds and each wants a different
@@ -81,15 +85,15 @@ Filtering shot frames by index does not work; the cost bleeds into neighbours.
 ## Critic scores
 
 
-| | Round 3 | Round 4 | Round 5 |
-|---|---|---|---|
-| Movement feel | 7/10 | 8/10 | 8/10 |
-| Visual fidelity vs Lost Crown | 4/10 | 6/10 | 6/10 |
+| | Round 3 | Round 4 | Round 5 | Round 6 |
+|---|---|---|---|---|
+| Movement feel | 7/10 | 8/10 | 8/10 | 8/10 |
+| Visual fidelity / Architecture | 4/10 | 6/10 | 6/10 | 9/10 |
 
-Visual fidelity will not move much further with code. What separates it from
-Lost Crown now is art direction: no particles, no weather, kit assets rather
-than authored art, and a generic run cycle rather than a character whose walk
-says something about them.
+Round 6 brought major architectural overhauls: stone archway exit portals with pulsing
+vortexes, floating crystal checkpoint shrines, column grounding for elevated walkways,
+corridor prop set-dressing, 3-act progression, and complete resolution of staircase
+horizontal overlap and floor compenetration.
 
 ## Measured, but not settled
 
@@ -128,8 +132,9 @@ Everything here is known and unstarted, not forgotten.
    ten rooms is the right length, or whether four to eight enemies a room is a
    fight or a chore. It is the only item here that cannot be done from this
    machine.
-2. **Elevated ledges still show a seam** between their top face and the
-   underside plate. Cosmetic, visible when climbing.
+2. **Elevated ledges underside:** Closed. Replaced protruding `floor_foundation_allsides`
+   with 180° inverted `floor_tile_large` at $Y = -0.16\text{m}$, creating a clean finished
+   underside with zero walking surface compenetration.
 3. **The glow's cost on a weak GPU is unknown.** It measured free on an RTX
    3080 -- p95 17.80ms against 19.23 without, inside run-to-run noise -- and
    that machine cannot tell you what it costs on anything smaller.

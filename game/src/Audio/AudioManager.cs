@@ -50,8 +50,24 @@ public partial class AudioManager : Node
     /// run to run and the check built on it becomes flaky.
     private Random _rng = new();
 
-    /// Test hook. Null seed restores unseeded behaviour.
-    public void SetRandomSeedForTest(int? seed) => _rng = seed.HasValue ? new Random(seed.Value) : new Random();
+    /// The melody draws from its OWN generator, and that is not tidiness.
+    /// Sharing one Random put the tune downstream of everything else that draws
+    /// from it: the ambience drips, and the noise term in every jump, hit, land
+    /// and dash. Those are scheduled on `delta` and on what the player does,
+    /// while the notes advance on audio frames PUSHED, so how many draws fell
+    /// between two notes depended on the wall clock and on the fight -- and a
+    /// busy second of combat quietly rewrote the tune.
+    private Random _musicRng = new();
+
+    /// Test hook. Null seed restores unseeded behaviour. Both generators are
+    /// set: seeding only the effects one would leave the melody drifting, which
+    /// is the defect above.
+    public void SetRandomSeedForTest(int? seed)
+    {
+        _rng = seed.HasValue ? new Random(seed.Value) : new Random();
+        // Offset so the two streams are independent rather than identical.
+        _musicRng = seed.HasValue ? new Random(seed.Value + 1) : new Random();
+    }
 
     public override void _EnterTree()
     {
@@ -90,6 +106,7 @@ public partial class AudioManager : Node
         EventBus.Instance.EnemyDamaged += OnEnemyDamaged;
         EventBus.Instance.Parried += OnParried;
         EventBus.Instance.RoomEntered += OnRoomEnteredForMusic;
+        EventBus.Instance.RoomShape += OnRoomShape;
         EventBus.Instance.BossStateChanged += OnBossStateForMusic;
 
         _ambienceVoice = MakeExtraVoice("Ambience", AmbienceVolumeDb);
@@ -102,6 +119,22 @@ public partial class AudioManager : Node
 
     public override void _ExitTree()
     {
+        // Before the EventBus guard below, and deliberately. A bed holds a
+        // loaded AudioStream, and a stream still attached to a player at
+        // shutdown is a resource the engine reports as still in use -- measured
+        // 3 runs out of 3 with beds on and 0 out of 3 with them off, which is
+        // what turned the boot check red. The generated voices never showed
+        // this because an AudioStreamGenerator is built here rather than
+        // loaded, so nothing outside held it.
+        foreach (var bed in new[] { _bedA, _bedB, _layerA, _layerB })
+        {
+            if (bed == null || !IsInstanceValid(bed)) continue;
+            bed.Stop();
+            bed.Stream = null;
+        }
+        _bedA = _bedB = _layerA = _layerB = null;
+        _bedPlaying = _bedWanted = _layerPlaying = _layerWanted = "";
+
         if (EventBus.Instance == null)
         {
             return;
@@ -116,6 +149,7 @@ public partial class AudioManager : Node
         EventBus.Instance.EnemyDamaged -= OnEnemyDamaged;
         EventBus.Instance.Parried -= OnParried;
         EventBus.Instance.RoomEntered -= OnRoomEnteredForMusic;
+        EventBus.Instance.RoomShape -= OnRoomShape;
         EventBus.Instance.BossStateChanged -= OnBossStateForMusic;
     }
 
@@ -196,12 +230,19 @@ public partial class AudioManager : Node
     {
         if (!PlayAmbience || _ambienceVoice == null) return;
 
-        // The drone is pushed in chunks as the buffer drains, so it never ends.
+        // The drone is pushed in chunks as the buffer drains, so it never ends --
+        // unless a recorded bed has taken over the job, which is what the drone
+        // was standing in for. The generator still has to be drained or its
+        // buffer fills and the voice reports starvation to anything watching.
         if (!_ambienceVoice.Playing) _ambienceVoice.Play();
         if (_ambienceVoice.GetStreamPlayback() is AudioStreamGeneratorPlayback drone)
         {
             int room = drone.GetFramesAvailable();
-            if (room > MixRate / 4) PushDrone(drone, room);
+            if (room > MixRate / 4)
+            {
+                if (_bedPlaying.Length > 0) PushSilence(drone, room);
+                else PushDrone(drone, room);
+            }
         }
 
         _nextDripIn -= delta;
@@ -222,6 +263,15 @@ public partial class AudioManager : Node
     }
 
     private double _dronePhaseA, _dronePhaseB;
+
+    /// Keeps the generator voice fed while a recorded bed carries the room.
+    /// Silence still has to be pushed: an AudioStreamGenerator whose buffer is
+    /// never drained reads as starved, and check 48 watches for exactly that.
+    private static void PushSilence(AudioStreamGeneratorPlayback playback, int frames)
+    {
+        var buf = new Vector2[frames];
+        playback.PushBuffer(buf);
+    }
 
     private void PushDrone(AudioStreamGeneratorPlayback playback, int frames)
     {
@@ -306,14 +356,24 @@ public partial class AudioManager : Node
         return p;
     }
 
+    private int _lastRoom, _lastRoomTotal = 1;
+
     private void OnRoomEnteredForMusic(int index, int total)
     {
         MusicIntensity = total <= 1 ? 0f : Mathf.Clamp((float)index / (total - 1), 0f, 1f);
+        _lastRoom = index; _lastRoomTotal = total;
+        // The boss bed outranks the act's, and the boss room is inside act III:
+        // entering it must not pull the atmosphere back off the fight.
+        if (!MusicIsBossTheme) WantBed(BedForRoom(index, total));
     }
 
     private void OnBossStateForMusic(bool alive, float healthFraction, bool armoured, bool enraged)
     {
         MusicIsBossTheme = alive;
+        // Both directions, and the second one had to be added. The boss theme
+        // outstaying the boss is what a player hears after the kill -- the room
+        // is won and the music is still fighting.
+        WantBed(alive ? "boss_theme" : BedForRoom(_lastRoom, _lastRoomTotal));
     }
 
     private void TickMusic(double delta)
@@ -352,12 +412,13 @@ public partial class AudioManager : Node
                 // and six seconds of it produced two distinct pitches. Measured
                 // that way -- and it made the check flaky as well as the music
                 // dull, because "at least three pitches" was a coin flip.
-                int next = _musicStep + _rng.Next(-3, 4);
+                int next = _musicStep + _musicRng.Next(-3, 4);
                 int top = MinorSteps.Length - 1;
                 if (next < 0) next = -next;
                 if (next > top) next = 2 * top - next;
                 _musicStep = Mathf.Clamp(next, 0, top);
                 MusicNoteHz = (float)(root * 4.0 * MinorSteps[_musicStep]);
+                OnMusicNoteForTest?.Invoke(MusicNoteHz);
                 _musicNotePhase = 0.0;
             }
 
@@ -387,6 +448,183 @@ public partial class AudioManager : Node
     {
         TickAmbience(delta);
         TickMusic(delta);
+        TickBeds(delta);
+    }
+
+    // ---- Recorded ambience beds -------------------------------------------
+    //
+    // Three CC0 atmospheres, one per act, and a fourth for the boss. They
+    // REPLACE the synthesised drone rather than layering over it: two
+    // continuous ambient sources on the same bus is mud, and the drone was
+    // always a stand-in for exactly this. The drips stay -- those are events,
+    // and they are what stops a bed from being wallpaper.
+    //
+    // The melody stays too. It is the thing that answers to the run, and a
+    // recording cannot: `MusicIntensity` rises room by room and the boss theme
+    // swaps. A bed is a place; the melody is what is happening in it.
+
+    [Export] public bool PlayBeds = true;
+    [Export] public float BedVolumeDb = -16f;
+    /// Long enough to read as a change of place rather than an edit.
+    [Export] public float BedCrossfadeSeconds = 2.5f;
+
+    private const string BedDir = "res://assets/audio/";
+    private AudioStreamPlayer _bedA, _bedB;
+    private bool _bedBIsActive;
+    private double _bedFade = 1.0;
+    private string _bedWanted = "", _bedPlaying = "";
+
+    /// TEST SEAM. Which bed is sounding, by file stem. Empty before the first
+    /// room. The act boundaries are a rule, not a table, so a check can read
+    /// them back instead of a human trusting them.
+    public string CurrentBedName => _bedPlaying;
+
+    /// Act from position in the run rather than from a room number, because
+    /// RunLength is an [Export]: at ten rooms this is 0-3, 4-6, 7-9, which is
+    /// the progression STATUS.md describes, and it still divides into thirds if
+    /// the run is retuned.
+    public static string BedForRoom(int index, int total)
+    {
+        float t = total <= 1 ? 0f : Mathf.Clamp((float)index / (total - 1), 0f, 1f);
+        return t < 0.4f ? "act1_forgotten_crypts"
+             : t < 0.7f ? "act2_sunken_catacombs"
+             : "act3_wardens_sanctum";
+    }
+
+    private void WantBed(string stem)
+    {
+        if (!PlayBeds || stem == _bedWanted) return;
+        _bedWanted = stem;
+    }
+
+    private static AudioStream LoadBed(string stem)
+    {
+        foreach (var ext in new[] { ".wav", ".ogg" })
+            if (ResourceLoader.Exists(BedDir + stem + ext))
+                // CacheMode.Ignore, not the default. A cached AudioStream is
+                // still held by ResourceLoader after the player releases it, and
+                // the engine reports it as "1 resources still in use at exit" --
+                // measured 3 of 3 boots with beds on, 0 of 3 with them off, and
+                // clearing the player's Stream in _ExitTree did not touch it
+                // because the cache, not the player, was the owner.
+                return ResourceLoader.Load<AudioStream>(BedDir + stem + ext, "",
+                                                        ResourceLoader.CacheMode.Ignore);
+        return null;
+    }
+
+    // ---- The second layer -------------------------------------------------
+    //
+    // The bed says which ACT you are in. The layer says what the ROOM is: a
+    // corridor, an open drop, a shaft. It is quieter than the bed by design --
+    // a second voice at the same level is not a layer, it is a fight.
+    //
+    // Ten rooms are cycled from three layouts, and the sixth is the first with
+    // wider gaps. Nothing can make that untrue from the audio side; what this
+    // can do is stop two rooms of the same layout from ALSO sounding identical,
+    // because their shapes differ even when their plan does not.
+
+    [Export] public float LayerVolumeDb = -24f;
+
+    private AudioStreamPlayer _layerA, _layerB;
+    private bool _layerBIsActive;
+    private double _layerFade = 1.0;
+    private string _layerWanted = "", _layerPlaying = "";
+
+    /// TEST SEAM. Which second layer is sounding, by file stem.
+    public string CurrentLayerName => _layerPlaying;
+
+    /// The room's own shape picks it. Classified in World against the player's
+    /// jump -- see DungeonRoomBuilder.ShapeOf -- and crossing as a string so
+    /// this file needs to know nothing about level geometry.
+    public static string LayerForShape(string shape) => shape switch
+    {
+        "flat" => "layer_dungeon",
+        "climb" => "layer_underground_breath",
+        _ => "layer_cave_sines",
+    };
+
+    private void OnRoomShape(string shape)
+    {
+        if (PlayBeds) _layerWanted = LayerForShape(shape);
+    }
+
+    private void TickBeds(double delta)
+    {
+        if (!PlayBeds) return;
+        _bedA ??= MakeBedVoice("BedA");
+        _bedB ??= MakeBedVoice("BedB");
+        _layerA ??= MakeBedVoice("LayerA");
+        _layerB ??= MakeBedVoice("LayerB");
+
+        if (_bedWanted.Length > 0 && _bedWanted != _bedPlaying)
+        {
+            var stream = LoadBed(_bedWanted);
+            if (stream != null)
+            {
+                var incoming = _bedBIsActive ? _bedA : _bedB;
+                incoming.Stream = stream;
+                incoming.VolumeDb = SilentDb;
+                incoming.Play();
+                _bedBIsActive = !_bedBIsActive;
+                _bedFade = 0.0;
+                _bedPlaying = _bedWanted;
+            }
+            else
+            {
+                // Say so once rather than fading silently to nothing.
+                GD.PushWarning($"AudioManager: no bed asset for '{_bedWanted}'");
+                _bedWanted = _bedPlaying;
+            }
+        }
+
+        if (_bedFade < 1.0)
+            _bedFade = Mathf.Min(1.0, _bedFade + delta / Mathf.Max(0.05f, BedCrossfadeSeconds));
+
+        var up = _bedBIsActive ? _bedB : _bedA;
+        var down = _bedBIsActive ? _bedA : _bedB;
+        up.VolumeDb = Mathf.Lerp(SilentDb, BedVolumeDb, (float)_bedFade);
+        down.VolumeDb = Mathf.Lerp(BedVolumeDb, SilentDb, (float)_bedFade);
+        if (_bedFade >= 1.0 && down.Playing) down.Stop();
+
+        if (_layerWanted.Length > 0 && _layerWanted != _layerPlaying)
+        {
+            var stream = LoadBed(_layerWanted);
+            if (stream != null)
+            {
+                var incoming = _layerBIsActive ? _layerA : _layerB;
+                incoming.Stream = stream;
+                incoming.VolumeDb = SilentDb;
+                incoming.Play();
+                _layerBIsActive = !_layerBIsActive;
+                _layerFade = 0.0;
+                _layerPlaying = _layerWanted;
+            }
+            else
+            {
+                GD.PushWarning($"AudioManager: no layer asset for '{_layerWanted}'");
+                _layerWanted = _layerPlaying;
+            }
+        }
+
+        if (_layerFade < 1.0)
+            _layerFade = Mathf.Min(1.0, _layerFade + delta / Mathf.Max(0.05f, BedCrossfadeSeconds));
+
+        var lUp = _layerBIsActive ? _layerB : _layerA;
+        var lDown = _layerBIsActive ? _layerA : _layerB;
+        lUp.VolumeDb = Mathf.Lerp(SilentDb, LayerVolumeDb, (float)_layerFade);
+        lDown.VolumeDb = Mathf.Lerp(LayerVolumeDb, SilentDb, (float)_layerFade);
+        if (_layerFade >= 1.0 && lDown.Playing) lDown.Stop();
+    }
+
+    /// -60 dB rather than 0 linear: VolumeDb is logarithmic, and lerping to
+    /// float.NegativeInfinity produces NaN the moment it is multiplied.
+    private const float SilentDb = -60f;
+
+    private AudioStreamPlayer MakeBedVoice(string name)
+    {
+        var p = new AudioStreamPlayer { Name = name, VolumeDb = SilentDb };
+        AddChild(p);
+        return p;
     }
 
     private void OnParried(bool perfect, Vector3 atPosition)
@@ -540,6 +778,17 @@ public partial class AudioManager : Node
     /// event, so sound differentiation can be measured rather than assumed.
     /// Null in normal play.
     public static System.Action<string, float[]> OnBufferForTest;
+
+    /// Test hook, and it exists because polling could not do the job. A note
+    /// lasts about a second, but TickMusic fills the WHOLE available buffer in
+    /// one call -- up to 2.2 seconds of audio -- so a single frame can start two
+    /// or three notes and `MusicNoteHz` only ever holds the last of them. A
+    /// harness sampling once per frame therefore sees every note on an idle
+    /// machine and misses most of them on a busy one, which is precisely how
+    /// the music check passed alone and failed inside a full gate run. Fires
+    /// once per note, so a harness counts what was played rather than what it
+    /// happened to catch. Null in normal play.
+    public static System.Action<float> OnMusicNoteForTest;
 
     private void Emit(float[] monoSamples, string eventName)
     {

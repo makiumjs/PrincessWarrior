@@ -378,12 +378,14 @@ public partial class CombatController : Node3D
             GD.Print($"[Combat] hit {target.Name} for {damage} damage ({_currentType}, combo {_comboStep})");
     }
 
-    private void TriggerHitStop()
+    public void TriggerHitStop(int durationMs = -1)
     {
-        if (HitStopDurationMs <= 0) return;
+        int dur = durationMs > 0 ? durationMs : HitStopDurationMs;
+        if (dur <= 0 || GetTree() == null) return;
+        if (_selfAppliedTimeScale < 1f) return; // Prevent compounding if already in hit-stop
         _selfAppliedTimeScale = HitStopTimeScale;
         Engine.TimeScale *= HitStopTimeScale;
-        var timer = GetTree().CreateTimer(HitStopDurationMs / 1000.0, processAlways: true,
+        var timer = GetTree().CreateTimer(dur / 1000.0, processAlways: true,
             processInPhysics: false, ignoreTimeScale: true);
         timer.Timeout += () =>
         {
@@ -410,11 +412,8 @@ public partial class CombatController : Node3D
     /// How long the guard stays up after a press.
     [Export] public float ParryWindowMs = 380f;
 
-    /// The opening slice of that window that counts as perfect. Tuned against
-    /// the tells it has to answer: a melee wind-up is 0.35s and the sentry
-    /// draws for 0.55s, so a 0.14s window rewards reading the tell rather than
-    /// mashing, while still being reachable once the arm draws back.
-    [Export] public float PerfectParryMs = 140f;
+    /// The opening slice of that window that counts as perfect (220ms per brief item 06).
+    [Export] public float PerfectParryMs = 220f;
 
     /// Stops the guard being held permanently by spamming the key.
     [Export] public float ParryCooldownMs = 520f;
@@ -434,9 +433,13 @@ public partial class CombatController : Node3D
         : 1f - Mathf.Clamp(_parryTimer / (ParryWindowMs / 1000f), 0f, 1f);
 
     public bool ParryIsPerfectNow => _parryTimer > 0f && _parryHeldFor <= PerfectParryMs / 1000f;
+    public float ParryHeldFor => _parryHeldFor;
+    public float TimeSinceLastParryPress { get; private set; } = 999f;
+    public float ParryCooldownRemaining => _parryCooldown;
 
     private void TickParry(float dt)
     {
+        TimeSinceLastParryPress += dt;
         if (_parryCooldown > 0f) _parryCooldown = Mathf.Max(0f, _parryCooldown - dt);
 
         if (_parryTimer > 0f)
@@ -445,11 +448,15 @@ public partial class CombatController : Node3D
             _parryHeldFor += dt;
         }
 
-        if (Input.IsActionJustPressed("parry") && _parryTimer <= 0f && _parryCooldown <= 0f)
+        if (Input.IsActionJustPressed("parry"))
         {
-            _parryTimer = ParryWindowMs / 1000f;
-            _parryHeldFor = 0f;
-            _parryCooldown = ParryCooldownMs / 1000f;
+            TimeSinceLastParryPress = 0f;
+            if (_parryTimer <= 0f && _parryCooldown <= 0f)
+            {
+                _parryTimer = ParryWindowMs / 1000f;
+                _parryHeldFor = 0f;
+                _parryCooldown = ParryCooldownMs / 1000f;
+            }
         }
     }
 
@@ -472,6 +479,12 @@ public partial class CombatController : Node3D
     /// are missing", which was literally true: ClipFor had no attack case
     /// because there was no clip to name.
     public bool IsSwinging => _phase is AttackPhase.Windup or AttackPhase.Active;
+
+    public bool IsActivePhase => _phase == AttackPhase.Active;
+
+    public int ComboStep => _comboStep;
+
+    public float CurrentAttackTotalDuration => WindupSeconds() + ActiveSeconds() + RecoverySeconds();
 
     /// 0 at the start of the windup, 1 at the end of the active frames.
     public float SwingProgress

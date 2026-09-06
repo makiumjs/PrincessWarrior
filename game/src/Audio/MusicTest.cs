@@ -19,13 +19,43 @@ namespace LostCrownlike.Audio;
 ///   the notes actually CHANGE, more than a couple of distinct pitches;
 ///   the boss is not the corridor.
 ///
-/// Frames are not seconds here either: the note interval is about a second of
-/// WALL time, and under --fixed-fps a frame is roughly a millisecond, so this
-/// waits on the clock rather than on a frame count. That mistake has been made
-/// three times in this suite.
+/// Neither frames nor seconds: this waits on NOTES.
+///
+/// It used to listen for six wall-clock seconds and assert three distinct
+/// pitches. Six seconds is about five notes, and the figure is a random WALK
+/// with a step of -3..+3 degrees -- so "three distinct out of five" was a
+/// throw of the dice, and it came up short inside a full gate run while
+/// passing eight times standing alone on the same build. The pitch counts
+/// across those runs were 4, 5, 4, 6, 5, 4, 5, 5.
+///
+/// Seeding the synthesiser -- the seam check 22 uses -- does NOT fix it, and
+/// that was measured too: 4, 6, 4, 5, 5. The reason is that AudioManager's one
+/// Random is shared with the ambience, whose drips are scheduled on `delta`
+/// while the notes advance on audio frames PUSHED, so how many draws the drips
+/// take between two notes depends on the wall clock. Two clocks, one
+/// generator, and the walk lands somewhere different every run.
+///
+/// So the window is counted in notes instead. Twelve of them cannot come up
+/// under three distinct pitches unless the walk itself is broken, which is the
+/// claim being made -- and a run that never reaches twelve is a stopped
+/// stream, which the wall-clock cap below reports as the failure it is.
+///
+/// Counting the window in notes was not enough on its own, and the second gate
+/// run said so. The pitches were still gathered by POLLING `MusicNoteHz` once
+/// per frame, and TickMusic fills the whole available buffer in one call -- up
+/// to 2.2 seconds, two or three notes -- keeping only the last. On an idle
+/// machine frames are cheap and every note is seen; inside a gate that has just
+/// exported a 208 MB binary they are not, and the poll saw two pitches out of
+/// twelve notes. The count now comes from `OnMusicNoteForTest`, which fires
+/// once per note, so what is measured is what was played.
 public partial class MusicTest : Node
 {
-    private const double ListenSeconds = 6.0;
+    /// Notes, not seconds. Twelve is about fourteen seconds of corridor.
+    private const int NotesToHear = 12;
+
+    /// Only a backstop against a stream that has died: at ~1.15s a note,
+    /// twelve notes take ~14s, so forty means "these notes are never coming".
+    private const double PhaseCapSeconds = 40.0;
 
     private int _f;
     private AudioManager _audio;
@@ -46,7 +76,16 @@ public partial class MusicTest : Node
     public override void _Process(double delta)
     {
         _f++;
-        _audio ??= FindFirst<AudioManager>(GetTree().Root);
+        if (_audio == null)
+        {
+            _audio = FindFirst<AudioManager>(GetTree().Root);
+            if (_audio != null)
+                AudioManager.OnMusicNoteForTest = hz =>
+                {
+                    if (_phase == 1) _pitchesEarly.Add(Mathf.RoundToInt(hz));
+                    else if (_phase == 3) _pitchesBoss.Add(Mathf.RoundToInt(hz));
+                };
+        }
         _room ??= FindFirst<DungeonRoomBuilder>(GetTree().Root);
         if (_audio == null || _room == null) return;
         if (_room.IsRebuilding) return;
@@ -74,12 +113,18 @@ public partial class MusicTest : Node
                 return;
 
             case 1:
-                _pitchesEarly.Add(Mathf.RoundToInt(_audio.MusicNoteHz));
-                if (Elapsed() < ListenSeconds) return;
+                if (_audio.MusicNotesPlayed - _notesAtStart < NotesToHear)
+                {
+                    if (Elapsed() < PhaseCapSeconds) return;
+                    Done(false, $"only {_audio.MusicNotesPlayed - _notesAtStart} notes in " +
+                                $"{PhaseCapSeconds:F0}s -- the music stopped");
+                    return;
+                }
                 _notesAfterListening = _audio.MusicNotesPlayed;
-                GD.Print($"[MUSIC] {ListenSeconds:F0}s of corridor: notes {_notesAtStart} -> " +
-                         $"{_notesAfterListening}, distinct pitches {_pitchesEarly.Count}, " +
-                         $"intensity {_intensityEarly:F2}, starved {_timesStarved}x");
+                GD.Print($"[MUSIC] {NotesToHear} notes of corridor in {Elapsed():F1}s: notes " +
+                         $"{_notesAtStart} -> {_notesAfterListening}, distinct pitches " +
+                         $"{_pitchesEarly.Count}, intensity {_intensityEarly:F2}, " +
+                         $"starved {_timesStarved}x");
                 _room.RebuildAs(_room.RunLength - 1);   // the boss room
                 Advance();
                 return;
@@ -92,11 +137,16 @@ public partial class MusicTest : Node
 
             case 3:
                 if (_audio.MusicIsBossTheme) _bossThemeSeen = true;
-                _pitchesBoss.Add(Mathf.RoundToInt(_audio.MusicNoteHz));
-                if (Elapsed() < ListenSeconds) return;
+                if (_audio.MusicNotesPlayed - _notesAfterListening < NotesToHear)
+                {
+                    if (Elapsed() < PhaseCapSeconds) return;
+                    Done(false, $"only {_audio.MusicNotesPlayed - _notesAfterListening} boss " +
+                                $"notes in {PhaseCapSeconds:F0}s -- the music stopped");
+                    return;
+                }
 
-                GD.Print($"[MUSIC] {ListenSeconds:F0}s of boss room: distinct pitches " +
-                         $"{_pitchesBoss.Count}, boss theme engaged {_bossThemeSeen}, " +
+                GD.Print($"[MUSIC] {NotesToHear} notes of boss room in {Elapsed():F1}s: distinct " +
+                         $"pitches {_pitchesBoss.Count}, boss theme engaged {_bossThemeSeen}, " +
                          $"intensity {_intensityLate:F2}");
 
                 bool moved = _notesAfterListening - _notesAtStart >= 3;
@@ -121,6 +171,7 @@ public partial class MusicTest : Node
 
     private void Done(bool ok, string why)
     {
+        AudioManager.OnMusicNoteForTest = null;
         GD.Print(ok ? $"[MUSIC] RESULT: PASS ({why})"
                     : $"[MUSIC] RESULT: FAIL{(why.Length > 0 ? " (" + why + ")" : "")}");
         GetTree().Quit();

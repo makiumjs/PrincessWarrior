@@ -24,7 +24,7 @@ public partial class Skirmisher : EnemyController
     {
         ChaseSpeed = 5.2f;          // commits fast when it decides to strike
         AttackCooldown = 1.5f;      // long enough that the retreat is visible
-        AttackWindupTime = 0.22f;
+        AttackWindupTime = 0.32f; // increased from 0.22s to 0.32s per brief item 06 to make reaction possible
         MaxHealth = 24;
         AttackDamage = 12;
 

@@ -19,6 +19,7 @@ public partial class EnemyVisual : Node3D
     {
         "res://assets/kaykit/animations/Rig_Medium_MovementBasic.glb",
         "res://assets/kaykit/animations/Rig_Medium_General.glb",
+        "res://assets/kaykit/animations/Rig_Medium_Combat.glb",
     };
     [Export] public float CrossFade = 0.12f;
     [Export] public float ModelYawOffsetDegrees = 90f;
@@ -125,9 +126,11 @@ public partial class EnemyVisual : Node3D
         PoseBone(_upperArm, _restUpperArm, Mathf.DegToRad(draw), winding ? 0.35f : 0.6f);
         PoseBone(_lowerArm, _restLowerArm, Mathf.DegToRad(elbow), winding ? 0.35f : 0.6f);
 
-        // Brightest just before the blow, so the cue peaks when the answer is
-        // due rather than when the wind-up starts.
-        SetGlow(winding ? _enemy.WindupProgress * _tellFade : _tellFade * 0.35f);
+        // Brightest just before the blow, with a discrete bright flash frame marking
+        // the exact instant the parry window opens rather than only a slow ramp.
+        float remaining = _enemy.AttackWindupTime * (1f - _enemy.WindupProgress);
+        bool parryFlash = winding && remaining is <= 0.22f and >= 0.14f;
+        SetGlow(winding ? _enemy.WindupProgress * _tellFade : _tellFade * 0.35f, flash: parryFlash);
     }
 
     private void ReleaseBones(float delta)
@@ -152,7 +155,7 @@ public partial class EnemyVisual : Node3D
         _skel.SetBonePoseRotation(bone, current.Slerp(target, Mathf.Clamp(weight, 0f, 1f)).Normalized());
     }
 
-    private void SetGlow(float amount)
+    private void SetGlow(float amount, bool flash = false)
     {
         if (_weaponMeshes == null) return;
         foreach (var mi in _weaponMeshes)
@@ -167,9 +170,19 @@ public partial class EnemyVisual : Node3D
                 };
                 mi.MaterialOverlay = mat;
             }
-            mat.AlbedoColor = new Color(1f, 0.55f, 0.2f, amount * 0.5f);
-            mat.Emission = new Color(1f, 0.5f, 0.15f);
-            mat.EmissionEnergyMultiplier = amount * 3.5f;
+            if (flash)
+            {
+                // Discrete bright flash at parry window onset: white/gold spark
+                mat.AlbedoColor = new Color(1f, 1f, 0.9f, 0.9f);
+                mat.Emission = new Color(1f, 0.95f, 0.8f);
+                mat.EmissionEnergyMultiplier = 6.0f;
+            }
+            else
+            {
+                mat.AlbedoColor = new Color(1f, 0.55f, 0.2f, amount * 0.5f);
+                mat.Emission = new Color(1f, 0.5f, 0.15f);
+                mat.EmissionEnergyMultiplier = amount * 3.5f;
+            }
         }
     }
 
@@ -212,13 +225,12 @@ public partial class EnemyVisual : Node3D
         return null;
     }
 
-    private static string ClipFor(EnemyController.EnemyState state) => state switch
+    private string ClipFor(EnemyController.EnemyState state) => state switch
     {
         EnemyController.EnemyState.Patrol => "Walking_A",
         EnemyController.EnemyState.Chase => "Running_A",
-        // No dedicated melee-swing clip in the free Adventurers pack; Throw is
-        // the closest full-body committed action. Flagged, not hidden.
-        EnemyController.EnemyState.Attack => "Throw",
+        // Melee attacks use Slash_A from Rig_Medium_Combat.glb; CrossbowSentry retains Throw for drawing and releasing a bolt.
+        EnemyController.EnemyState.Attack => _enemy is CrossbowSentry ? "Throw" : "Slash_A",
         EnemyController.EnemyState.Stagger => "Hit_A",
         EnemyController.EnemyState.Dead => "Death_A",
         _ => "Idle_A",

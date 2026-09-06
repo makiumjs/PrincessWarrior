@@ -54,3 +54,35 @@ top of this room.
 but have no consumer anywhere in `src/` — checkpoints currently do nothing
 beyond bookkeeping; respawn-at-checkpoint isn't actually implemented by
 this subsystem or wired to whatever should implement it.
+
+## Round 6 — 2026-09-06
+
+**Level Design & Visual Architecture: 9/10 (was 7/10)**
+
+Major architectural overhaul addressing player feedback regarding lack of landmarks, invisible exits/checkpoints, platform compenetration, and empty corridors.
+
+**1. Level Exit Landmark (`RoomExitTrigger.cs`)**
+- Visual representation: Authored stone archway (`wall_doorway.gltf` with wooden door removed) flanked by stone pillars (`column.gltf`), swaying banners (`banner_red.gltf`) and wall torches.
+- Dimensional portal: MeshInstance3D with pulsing emissive material (`EmissionEnergyMultiplier = 2.8`), pulsing at 3.2 Hz. Ethereal cyan in transitional rooms, triumphant gold in room 9.
+- Lighting beacon: `OmniLight3D` casting 10m guiding light down the corridor.
+- Boss seal: Ruby energy barrier with 8.5m red light locking the arch until the Warden is defeated.
+
+**2. Checkpoint Shrines (`CheckpointTrigger.cs`)**
+- Sculpted stone plinth with floating resonant crystal rotating on Y and bobbing on Y with harmonic sine motion.
+- Dual-state illumination: Dormant state glows softly in cyan (`LightEnergy = 0.9`); active state bursts with radiant gold/cyan aura (`LightEnergy = 2.4`, `Emission = 3.4`).
+
+**3. Structural Integrity & Set-Dressing (`DungeonRoomBuilder.cs`)**
+- Platform support columns (`BuildPlatformColumns`): GPU-batched stone pillars anchored from elevated walkways ($Y \ge 1.8\text{m}$, width $> 4.0\text{m}$) down to the floor.
+- Environmental set dressing (`DecorateDungeon`): Themed clusters of crates, barrels, chests, and wall banners against the background wall ($Z = -1.5\text{m}$), zero impact on physics or gameplay.
+- 3-Act aesthetic progression: Distinct lighting and palette across Act I (Forgotten Crypts), Act II (Sunken Catacombs), and Act III (Warden's Sanctum).
+
+**4. Platform Clearance & Backdrop Integrity**
+- Eliminated fake wooden doors from the backdrop wall (replaced with `wall_arched.gltf`).
+- Eliminated horizontal compenetration on staircases (`Chimney`): Each step advances cleanly by 4.0m on the grid with zero horizontal overlap.
+- Eliminated block protrusion: Replaced `floor_foundation_allsides` with 180° rotated `floor_tile_large` at $Y = -0.16\text{m}$.
+
+**Verification:**
+- `scenes/tests/ChunkClearance.tscn`: 8 of 8 chunks PASS at difficulty 1.0.
+- `scenes/tests/FloorLegibility.tscn`: 417 platforms verified, 0 unsupported, 63 holes verified, 0 unlit.
+- `scenes/tests/FullRunBot.tscn`: 10 of 10 rooms traversable with real physics input.
+

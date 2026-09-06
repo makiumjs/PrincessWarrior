@@ -73,6 +73,17 @@ public partial class EventBus : Node
     /// at two minutes you remember; at twelve you do not.
     [Signal] public delegate void RoomEnteredEventHandler(int index, int total);
 
+    /// What the room IS, as opposed to where it sits in the run: "flat", "open"
+    /// or "climb", classified by the room's own vertical rise against the
+    /// player's jump. A second signal rather than a third parameter on
+    /// RoomEntered, because the HUD consumes that one and a room's shape is
+    /// nothing the HUD has an opinion about.
+    ///
+    /// The classification lives in World and crosses as a string, so Audio does
+    /// not have to know what a PlatformRect or a PlayerMetrics is to sound
+    /// different in a shaft than in a corridor.
+    [Signal] public delegate void RoomShapeEventHandler(string shape);
+
     /// The boss's state, for the HUD to draw. Flattened to primitives for the
     /// same reason as PlayerDamaged, and routed through the bus rather than
     /// letting the HUD find the boss: the HUD's one architectural rule is that
@@ -109,6 +120,9 @@ public partial class EventBus : Node
 
     public void EmitRoomEntered(int index, int total) =>
         EmitSignal(SignalName.RoomEntered, index, total);
+
+    public void EmitRoomShape(string shape) =>
+        EmitSignal(SignalName.RoomShape, shape);
 
     public void EmitBossStateChanged(bool alive, float healthFraction, bool armoured, bool enraged) =>
         EmitSignal(SignalName.BossStateChanged, alive, healthFraction, armoured, enraged);

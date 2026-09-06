@@ -267,9 +267,7 @@ public partial class TraversalBotTest : Node
         // the difficulty ramp makes those steps 0.83 units; at the saturated
         // 1.5 it walked away from the shaft holding right and climbed 0.1 of
         // the 3.7 it needed.
-        bool ledgeAbove = Ray(space, pos + new Vector3(0f, 0.9f, 0f), new Vector3(0f, _metrics.MaxJumpUp, 0f))
-                       || Ray(space, pos + new Vector3(0.8f, 0.9f, 0f), new Vector3(0f, _metrics.MaxJumpUp, 0f))
-                       || Ray(space, pos + new Vector3(-0.8f, 0.9f, 0f), new Vector3(0f, _metrics.MaxJumpUp, 0f));
+        bool ledgeAbove = Ray(space, pos + new Vector3(0f, 0.9f, 0f), new Vector3(0f, _metrics.MaxJumpUp, 0f));
         bool wantClimbStraightUp = ledgeAbove && _stuckFrames > 40;
 
         // Climb latch. Gating on the X-stall alone is self-defeating: the first

@@ -57,9 +57,17 @@ public partial class SideScrollCamera : Camera3D
     /// a bigger version of stepping off a ledge.
     [Export] public float ParryShakeStrength = 0.22f;
 
+    [ExportGroup("Dynamic Framing")]
+    [Export] public float BaseOrthoSize { get; set; } = 10.5f;
+    [Export] public float ArenaOrthoSize { get; set; } = 12.5f;
+    [Export] public float BossOrthoSize { get; set; } = 9.0f;
+    [Export] public float FramingTransitionSpeed { get; set; } = 2.2f;
+
     private Vector2 _focus;          // dead-zone-tracked focus point, world X/Y
     private float _lookAheadCurrent; // smoothed look-ahead offset (signed, along X)
     private float _shakeMagnitude;
+    private float _parryPushX;
+    private bool _bossActive;
     private bool _initialized;
 
     public override void _Ready()
@@ -70,6 +78,7 @@ public partial class SideScrollCamera : Camera3D
         {
             LostCrownlike.Core.EventBus.Instance.Landed += OnLanded;
             LostCrownlike.Core.EventBus.Instance.Parried += OnParried;
+            LostCrownlike.Core.EventBus.Instance.BossStateChanged += OnBossStateChanged;
         }
     }
 
@@ -79,8 +88,12 @@ public partial class SideScrollCamera : Camera3D
         {
             LostCrownlike.Core.EventBus.Instance.Landed -= OnLanded;
             LostCrownlike.Core.EventBus.Instance.Parried -= OnParried;
+            LostCrownlike.Core.EventBus.Instance.BossStateChanged -= OnBossStateChanged;
         }
     }
+
+    private void OnBossStateChanged(bool alive, float healthFraction, bool armoured, bool enraged) =>
+        _bossActive = alive;
 
     /// Read-only, for checks: shake is the only part of the camera's response
     /// that leaves no trace in its position once it has decayed.
@@ -91,8 +104,13 @@ public partial class SideScrollCamera : Camera3D
     /// An ordinary parry gets a fraction of it. The two have to be told apart
     /// by feel as well as by ear, or the player never learns which one they
     /// just did -- and learning that is the whole skill.
-    private void OnParried(bool perfect, Vector3 at) =>
+    private void OnParried(bool perfect, Vector3 at)
+    {
         _shakeMagnitude = perfect ? ParryShakeStrength : ParryShakeStrength * 0.35f;
+        float pushDir = Target != null ? Mathf.Sign(Target.GlobalPosition.X - at.X) : 0f;
+        if (pushDir == 0f && Target != null) pushDir = -Target.FacingSign;
+        _parryPushX = pushDir * (perfect ? 0.35f : 0.15f);
+    }
 
     public override void _Process(double delta)
     {
@@ -130,8 +148,13 @@ public partial class SideScrollCamera : Camera3D
         if (_shakeMagnitude > 0f)
             _shakeMagnitude = Mathf.MoveToward(_shakeMagnitude, 0f, ShakeDecaySpeed * dt);
 
+        if (Mathf.Abs(_parryPushX) > 0.001f)
+            _parryPushX = Mathf.MoveToward(_parryPushX, 0f, ShakeDecaySpeed * dt);
+        else
+            _parryPushX = 0f;
+
         var desired = new Vector3(
-            _focus.X + _lookAheadCurrent,
+            _focus.X + _lookAheadCurrent + _parryPushX,
             _focus.Y + HeightOffset - _shakeMagnitude,
             targetPos.Z + CameraDistance);
 
@@ -140,6 +163,33 @@ public partial class SideScrollCamera : Camera3D
         pos.Y = Mathf.Lerp(pos.Y, desired.Y, 1f - Mathf.Exp(-VerticalSmoothSpeed * dt));
         pos.Z = desired.Z;
         GlobalPosition = pos;
+
+        // Dynamic Orthographic Framing (Item 07 of Craft Plan):
+        // Pull back in an arena to give tactical awareness across all threats,
+        // push in on the Warden for an intimate, dramatic duel.
+        if (Projection == ProjectionType.Orthogonal)
+        {
+            bool inArena = false;
+            if (Target != null && !_bossActive)
+            {
+                var gates = GetTree().GetNodesInGroup(LostCrownlike.World.ArenaGate.GroupName);
+                foreach (var node in gates)
+                {
+                    if (node is LostCrownlike.World.ArenaGate gate && !gate.IsOpen
+                        && Target.GlobalPosition.X >= gate.SpanMinX && Target.GlobalPosition.X <= gate.SpanMaxX)
+                    {
+                        inArena = true;
+                        break;
+                    }
+                }
+            }
+
+            float targetSize = _bossActive ? BossOrthoSize : (inArena ? ArenaOrthoSize : BaseOrthoSize);
+            if (Mathf.Abs(Size - targetSize) > 0.01f)
+            {
+                Size = Mathf.MoveToward(Size, targetSize, FramingTransitionSpeed * dt);
+            }
+        }
 
         // Fixed orientation - no roll/pitch/yaw drift, keeps the 2.5D read.
         // Pitch, not zero: a perfectly level camera — orthographic especially —

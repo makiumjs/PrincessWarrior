@@ -1033,3 +1033,191 @@ under the ROOM, but the player is a child of Main so its dust is parented
 there; and it sampled a single instant when a 7m drop takes about 50 frames and
 a burst lives 18, so one sample could land on the wrong side of both.
 
+## The invisible exit, the invisible checkpoint, and corridors with no architecture
+
+Reported from play: *"a livello di level design siamo messi male, piattaforme, porte ed altri elementi sono messi a caso e non c'e niente che indica il fine livello"*.
+
+Four independent causes behind one impression:
+
+1. **The exit was an invisible volume in empty air.** A player running down the
+   corridor collided with a trigger they could not see and was abruptly teleported
+   into the next room.
+   *Fix:* An authored stone archway (`wall_doorway.gltf` stripped of its door panel),
+   flanked by stone columns (`column.gltf`), swaying banners (`banner_red.gltf`
+   with harmonic `BannerSway`), wall torches, and an animated dimensional portal
+   vortex (`PortalVortex`, cyan pulse in normal rooms, royal gold for the final exit)
+   with a 10m guiding light beacon (`OmniLight3D`). In the final room, a ruby
+   energy seal (`ExitSeal`) physically and visually locks the arch until the Warden dies.
+
+2. **Checkpoints were flat coordinates with no presence.**
+   *Fix:* A sculpted plinth (`column.gltf` scaled at $Z = -0.6\text{m}$) bearing a
+   hovering resonant crystal (`FloatingCrystal`). In standby, it pulses softly in dim
+   blue (`LightEnergy = 0.9`); upon player arrival, it attunes with a radiant cyan/gold
+   flare (`LightEnergy = 2.4`, `Emission = 3.4`), giving unambiguous visual feedback.
+
+3. **Platforms floated without architectural support.** Walkways were single planks
+   suspended in the void, and corridors were empty grey runs.
+   *Fix:* `BuildPlatformColumns` places GPU-batched stone columns (`column.gltf`) under
+   wide elevated walkways down to the floor, skipping narrow steps. `DecorateDungeon`
+   places themed prop clusters (stacked crates, large barrels, chests, wall banners)
+   along the back wall without polluting the movement plane.
+
+4. **Monotony across ten rooms.** All ten rooms shared identical limestone textures and
+   amber lighting.
+   *Fix:* A 3-act progression across the 10 rooms:
+   - *Act I (Rooms 0–3):* The Forgotten Crypts — warm limestone, golden amber fire (`1.0, 0.72, 0.42`).
+   - *Act II (Rooms 4–6):* The Sunken Catacombs — damp mossy slate, bioluminescent teal (`0.35, 0.88, 0.80`).
+   - *Act III (Rooms 7–9):* The Warden's Sanctum — dark obsidian stone, arcane amethyst flame (`0.85, 0.45, 1.0`).
+
+## Fake doors, stacked shelves, and the stone block through the floor
+
+Reported from play with photographic proof: *"una porta dietro le piattaforme, piattaforme mooolto vicine tra loro, compenetrazione"*.
+
+Three stacked geometry defects revealed in room 1:
+
+1. **A fake closed door on the backdrop wall.** In `DungeonRoomBuilder.cs`,
+   `(i % 4) switch { 1 => "wall_arched", 3 => "wall_doorway", _ => "wall" }`
+   placed `wall_doorway.gltf` with a closed red wooden door every 16 metres along
+   the backdrop, sliced in half whenever a platform ran in front of it.
+   *Fix:* Replaced `3 => "wall_doorway"` with `3 => "wall_arched"` in both `_Ready`
+   and `BuildBackdrop`. Doors belong exclusively to level portals.
+
+2. **Platform compenetration in Chimney.** `MicroChunk.cs` emitted `ledge = 1.8f`
+   and stepped `_cursorX += 2.0f`. But `PlacePlatform` rounds every ledge to the
+   4-metre grid: `tiles = Mathf.Max(1, Mathf.CeilToInt(r.Width / Grid))`. Every
+   ledge instantiated a **4.0-metre tile** and a 4.0-metre box collider! Advancing
+   by only 2.0m caused consecutive ledges to overlap horizontally by 2.0m (50%),
+   turning the staircase into a cramped stack of shelves.
+   *Fix:* Sized chimney ledges to the grid contract: `Emit(4f)` for each step,
+   advancing `_cursorX` by 4.0m with `step = Mathf.Clamp(_m.SafeStepUp * intensity, 1.3f, 1.8f)`.
+   Horizontal overlap is exactly **0.0 metres**, creating a clean, terraced metroidvania
+   staircase.
+
+3. **A stone block protruding 0.8m through the walking surface.** For elevated ledges,
+   `PlacePlatform` placed `floor_foundation_allsides` at `y = at.Y - LedgeThickness * 0.5f`.
+   The model `floor_foundation_allsides.gltf` has its origin at its **base** ($Y = 0$)
+   and is 2.0m tall. Placed at $-0.27\text{m}$, it thrust $0.82\text{m}$ into the air,
+   sitting directly in the player's path and stabbing through the underside of any
+   platform above it.
+   *Fix:* Removed `floor_foundation_allsides`. Capped the underside with `floor_tile_large`
+   rotated 180° around X (`new Basis(Vector3.Right, Mathf.Pi)`) at $Y = -0.16\text{m}$.
+   The walking surface is perfectly flat, and the underside renders as finished stone.
+
+4. **Bot stalling on forward probes.** In `TraversalBotTest.cs`, `ledgeAbove` probed
+   `pos + Vector3(0.8f, 0.9f, 0f)`. At a step-up, the probe hit the raised platform
+   ahead and flagged it as an "overhead ledge", triggering `wantClimbStraightUp` which
+   released `move_right`. The bot jumped in place forever.
+   *Fix:* Restricted `ledgeAbove` to directly overhead (`pos + Vector3(0f, 0.9f, 0f)`).
+   All 8 chunks at full difficulty now pass cleanly (Check 38: 8 of 8 PASS).
+
+
+## A check that was a coin flip, and the generator underneath it
+
+Check 60 went red in a full gate run and passed eight times standing alone on
+the same build. Nothing had changed between them.
+
+It listened for six wall-clock seconds and asserted at least three distinct
+pitches. Six seconds is about **five notes**, and the figure is a random walk
+stepping -3..+3 degrees, so "three distinct out of five" was a throw of the
+dice. `AudioManager` already said so in a comment -- an earlier fix had made
+the walk reflect at the ends rather than clamp, "because at least three pitches
+was a coin flip" -- and that fix lowered the odds without removing them.
+
+**Two diagnoses came before the right one, and both were measured rather than
+argued.**
+
+| Reading | How it died |
+|---|---|
+| the gate loads the machine, so fewer frames run | twelve busy loops gave the same corridor count as an idle machine |
+| the synthesiser is unseeded | seeded it with the seam check 22 uses: 4, 6, 4, 5, 5 -- still drifting |
+
+The seed failing is what pointed at the real cause. `AudioManager` held **one**
+`Random`, and the melody was last in the queue for it: the ambience drips draw
+from it, and so does the noise term in every jump, hit, land and dash. Those are
+scheduled on `delta` and on what the player does, while the notes advance on
+audio frames PUSHED. Two clocks, one generator -- so how many draws fell between
+two notes depended on the wall clock and on the fight, and a busy second of
+combat quietly rewrote the tune.
+
+**Both halves are fixed, and each was proven by breaking it.**
+
+The check now counts **notes, not seconds**: twelve of them cannot come up under
+three distinct pitches unless the walk itself is broken, which is the claim being
+made. A wall-clock cap remains, but only as a backstop that reports a dead
+stream as one instead of hanging. Freezing the walk (`_rng.Next(-3, 4)` -> `0`)
+drops it to one distinct pitch and the check fails; starving the note clock
+fails it with "only 0 notes in 40s -- the music stopped".
+
+The melody now draws from its own `Random`. `SetRandomSeedForTest` sets both,
+offset by one so the streams are independent rather than identical -- seeding
+only the effects generator would leave the tune drifting, which is the defect.
+Measured across five runs each, distinct pitches in the corridor: **4, 5, 6, 6,
+8 shared** against **6, 7, 6, 7, 5 separated**. The spread halves and the floor
+rises. Ten runs is not a statistical claim and is not offered as one; it is
+consistent with the mechanism, and the mechanism is the argument.
+
+The lesson is the one the suite keeps re-teaching from a new angle. A threshold
+is only as good as the sample it sits on, and "three distinct pitches" sounded
+like a property of the music when it was a property of five draws. The tell was
+there to be read: a check that fails in the gate and passes alone is never about
+the gate.
+
+## The boss music that outlived the boss
+
+Found while wiring recorded atmosphere to the acts, and not by looking for it.
+
+The beds are chosen by position in the run, with the boss theme overriding the
+act while the Warden lives -- the boss room sits inside act III, so entering it
+must not pull the atmosphere back off the fight. That half worked. The reverse
+did not, and nothing had ever asked about it: **a room rebuild FREES the Warden
+rather than killing it**, which is exactly what dying to the boss and respawning
+at a checkpoint does. `Die()` announced `alive=false`; being freed announced
+nothing. So `alive` stayed true with no boss anywhere in the world, and the boss
+theme -- and the HUD's boss bar -- played on three rooms back.
+
+`Warden._ExitTree` now says it is leaving.
+
+**The check missed it first, and that is the part worth writing down.** The bed
+check walked the run forwards: room 0 to the boss room, asserting each act's
+bed. Silencing `_ExitTree` on purpose left it green, because a forward walk ends
+at the boss and never asks what happens after. The check now walks BACK to room
+0 afterwards, which is the real scenario, and the same mutation turns it red
+with `boss_theme` sounding in room 0.
+
+A fix whose mutation does not fail the suite is not covered; it is only present.
+
+## Two clocks, one generator, and a check that was a coin flip
+
+Check 60 went red in a full gate run and passed eight times standing alone on
+the same build. Three readings, and the first two were wrong:
+
+| Reading | How it died |
+|---|---|
+| the gate loads the machine | twelve busy loops gave the same count as an idle machine |
+| the synthesiser is unseeded | seeded with the seam check 22 uses: 4, 6, 4, 5, 5 -- still drifting |
+
+The seed failing is what pointed at the cause. `AudioManager` held **one**
+`Random` and the melody was last in the queue for it: the ambience drips draw
+from it, and so does the noise term in every jump, hit, land and dash. Those are
+scheduled on `delta` and on what the player does, while notes advance on audio
+frames PUSHED. So a busy second of combat quietly rewrote the tune. The melody
+now has its own generator.
+
+That was not the whole of it. The check also counted its window in wall-clock
+seconds -- about five notes -- and asserted three distinct pitches, which is a
+throw of the dice. Counting the window in NOTES was still not enough, and the
+next gate run said so: the pitches were gathered by polling `MusicNoteHz` once
+per frame, and `TickMusic` fills the whole available buffer in one call, up to
+2.2 seconds and three notes, keeping only the last. On an idle machine every
+note is seen; inside a gate that has just exported a 197 MB binary they are not.
+
+`OnMusicNoteForTest` fires once per note, the same shape as the `OnBufferForTest`
+hook check 22 has used since a sound pair drifted under its threshold one run in
+six. Under 24 busy loops the phase now stretches from 13.3s to 19.4s -- the load
+bites -- and the pitch count stays at 8.
+
+Three lessons, and the middle one is the general one: a threshold is only as
+good as the sample it sits on; an instrument that cannot see every event will
+report the ones it caught as though they were all of them; and a mutation that
+does not move a number is telling you something about the pairing, not about the
+mechanic.

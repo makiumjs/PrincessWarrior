@@ -39,7 +39,10 @@ public static class InputSettings
         ("pause", "Pause"),
     };
 
+    private const string GraphicsSection = "graphics";
+
     public static float MasterVolume { get; private set; } = 1f;
+    public static bool GlowEnabled { get; private set; } = true;
 
     public static void EnsureApplied()
     {
@@ -59,6 +62,8 @@ public static class InputSettings
         if (cfg.Load(SettingsPath) != Error.Ok)
         {
             ApplyVolume(1f);
+            GlowEnabled = true;
+            ApplyGlow(true);
             return;
         }
 
@@ -70,6 +75,8 @@ public static class InputSettings
         }
 
         ApplyVolume((float)cfg.GetValue(AudioSection, "master", 1f));
+        GlowEnabled = (bool)cfg.GetValue(GraphicsSection, "glow", true);
+        ApplyGlow(GlowEnabled);
     }
 
     /// The physical keycode currently bound to an action, or None.
@@ -154,16 +161,53 @@ public static class InputSettings
         AudioServer.SetBusVolumeDb(0, Mathf.LinearToDb(MasterVolume));
     }
 
-    /// Back to the project file's bindings, and the override file with them.
+    public static void SetGlow(bool enabled, bool persist = true)
+    {
+        GlowEnabled = enabled;
+        ApplyGlow(enabled);
+        if (persist)
+        {
+            var cfg = new ConfigFile();
+            cfg.Load(SettingsPath);
+            cfg.SetValue(GraphicsSection, "glow", enabled);
+            cfg.Save(SettingsPath);
+        }
+    }
+
+    public static void ApplyGlow(bool enabled)
+    {
+        if (Engine.GetMainLoop() is SceneTree tree && tree.Root != null)
+        {
+            var we = FindWorldEnv(tree.Root);
+            if (we?.Environment != null)
+                we.Environment.GlowEnabled = enabled;
+        }
+    }
+
+    private static WorldEnvironment FindWorldEnv(Node from)
+    {
+        if (from == null) return null;
+        if (from is WorldEnvironment we) return we;
+        foreach (var c in from.GetChildren())
+        {
+            var found = FindWorldEnv(c);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
     public static void ResetToDefaults()
     {
         InputMap.LoadFromProjectSettings();
         var cfg = new ConfigFile();
         if (cfg.Load(SettingsPath) == Error.Ok)
         {
-            cfg.EraseSection(BindSection);
+            if (cfg.HasSection(BindSection)) cfg.EraseSection(BindSection);
+            if (cfg.HasSection(GraphicsSection)) cfg.EraseSection(GraphicsSection);
             cfg.Save(SettingsPath);
         }
+        GlowEnabled = true;
+        ApplyGlow(true);
     }
 
     /// Human-readable name of a key, translated through the active keyboard

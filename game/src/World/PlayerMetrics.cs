@@ -74,12 +74,10 @@ public sealed class PlayerMetrics
     /// problem, since the player has to gain height in the same jump. Measured
     /// at SafeGap (2.44) the bot climbed 3.0 of the 4.3 it needed and stalled.
     /// This is the smallest stagger that still leaves no ledge above another.
-    public float ChimneyStagger => ChimneyLedgeWidth + 0.2f;
+    public float ChimneyStagger => 4.0f;
 
-    /// Ledge width, kept just under the stagger so no ledge sits above another.
-    /// Narrow enough that a small stagger clears it, wide enough to land on:
-    /// the player capsule is 0.8 across.
-    public float ChimneyLedgeWidth => 1.8f;
+    /// Ledge width, matching the 4.0m tile grid so each step aligns without compenetration.
+    public float ChimneyLedgeWidth => 4.0f;
 
     /// Logs a warning if the live controller has been retuned away from these
     /// numbers, which would silently make generated rooms unbeatable.

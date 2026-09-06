@@ -293,7 +293,27 @@ public partial class DungeonRoomBuilder : Node3D
         yield return () => SpawnArenaGates(composer);
         yield return () => SpawnExit(composer);
         yield return FlushBatches;
-        yield return () => Core.EventBus.Instance?.EmitRoomEntered(RoomIndex, RunLength);
+        yield return () =>
+        {
+            Core.EventBus.Instance?.EmitRoomEntered(RoomIndex, RunLength);
+            Core.EventBus.Instance?.EmitRoomShape(ShapeOf(composer, metrics));
+        };
+    }
+
+    /// How tall the room is, in the player's own terms. The thresholds are not
+    /// metres picked by eye: a room that never rises more than two safe
+    /// step-ups is ground you walk, and one that climbs past three double jumps
+    /// is a shaft you work up. Both come from PlayerMetrics, so retuning the
+    /// jump moves the boundaries with it -- the rule the level geometry already
+    /// follows everywhere else.
+    public static string ShapeOf(MicroChunkComposer composer, PlayerMetrics m)
+    {
+        float lo = float.MaxValue, hi = float.MinValue;
+        foreach (var r in composer.Rects) { if (r.Y < lo) lo = r.Y; if (r.Y > hi) hi = r.Y; }
+        float rise = hi - lo;
+        if (rise <= m.SafeStepUp * 2f) return "flat";
+        if (rise >= m.MaxDoubleJumpUp * 3f) return "climb";
+        return "open";
     }
 
     /// One chunk, flanked by flat ground, at the hardest setting the ramp ever

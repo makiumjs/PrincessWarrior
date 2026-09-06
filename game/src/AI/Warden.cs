@@ -112,6 +112,22 @@ public partial class Warden : EnemyController
         Core.EventBus.Instance?.EmitBossStateChanged(alive, HealthFraction, IsArmoured, IsEnraged);
     }
 
+    /// Leaving is a state change too, and nothing was saying so. A room rebuild
+    /// frees the Warden without killing it -- respawning at a checkpoint after
+    /// dying to the boss does exactly that -- so `alive` stayed true with no
+    /// boss in the world: the HUD's bar and the boss music both outlived the
+    /// fight. Found by the bed check, which read the boss theme still playing
+    /// three rooms earlier.
+    public override void _ExitTree()
+    {
+        base._ExitTree();
+        if (_lastBroadcastAlive)
+        {
+            _lastBroadcastAlive = false;
+            Core.EventBus.Instance?.EmitBossStateChanged(false, 0f, false, IsEnraged);
+        }
+    }
+
     protected override void Die()
     {
         base.Die();

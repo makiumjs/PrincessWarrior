@@ -20,6 +20,7 @@ public partial class PlayerVisual : Node3D
     {
         "res://assets/kaykit/animations/Rig_Medium_MovementBasic.glb",
         "res://assets/kaykit/animations/Rig_Medium_General.glb",
+        "res://assets/kaykit/animations/Rig_Medium_Combat.glb",
     };
 
     /// Blend time between clips, seconds. Keeps state flips from popping.
@@ -57,10 +58,18 @@ public partial class PlayerVisual : Node3D
     [Export] public float SwingLeanDegrees = 7f;
     private string _current = "";
 
+    private float _parrySuccessTimer;
+    private bool _parrySuccessIsPerfect;
+    private int _lastComboStep = -1;
+    private bool _wasAttacking;
+
     public override void _Ready()
     {
         _player = GetParent<PlayerController>()
                   ?? GetTree().GetFirstNodeInGroup("player") as PlayerController;
+
+        if (Core.EventBus.Instance != null)
+            Core.EventBus.Instance.Parried += OnParried;
 
         var charScene = GD.Load<PackedScene>(CharacterScene);
         if (charScene == null)
@@ -106,75 +115,145 @@ public partial class PlayerVisual : Node3D
         MakeLoopable();
     }
 
+    public override void _ExitTree()
+    {
+        if (Core.EventBus.Instance != null)
+            Core.EventBus.Instance.Parried -= OnParried;
+    }
+
+    private void OnParried(bool perfect, Vector3 atPosition)
+    {
+        _parrySuccessTimer = 0.28f;
+        _parrySuccessIsPerfect = perfect;
+    }
+
     public override void _Process(double delta)
     {
         if (_player == null || _anim == null) return;
-        Play(ClipFor(_player.CurrentState));
+        _combat ??= _player.GetNodeOrNull<Combat.CombatController>("CombatController");
+
+        bool parrying = _combat != null && _combat.IsParrying;
+        bool attacking = _combat != null && _combat.IsAttacking && !parrying;
+
+        if (_parrySuccessTimer > 0f)
+        {
+            _parrySuccessTimer -= (float)delta;
+            _anim.SpeedScale = 1f;
+            PlayClip("Idle_A", restart: false);
+        }
+        else if (attacking)
+        {
+            float totalDur = _combat.CurrentAttackTotalDuration;
+            float speed = 0.833f / Mathf.Max(totalDur, 0.05f);
+            _anim.SpeedScale = speed;
+
+            if (!_wasAttacking || _combat.ComboStep != _lastComboStep)
+            {
+                PlayClip("Slash_A", restart: true);
+                _lastComboStep = _combat.ComboStep;
+            }
+            else
+            {
+                PlayClip("Slash_A", restart: false);
+            }
+            _wasAttacking = true;
+        }
+        else
+        {
+            _wasAttacking = false;
+            _lastComboStep = -1;
+            _anim.SpeedScale = 1f;
+            Play(ClipFor(_player.CurrentState));
+        }
+
         TickSwing((float)delta);
     }
 
-    /// Draws the attack, because no clip exists to play. The weapon rotates
-    /// through an arc on a pivot under the hand bone, and the model leans into
-    /// it; both return to rest the moment the swing ends. Cheap, but it is the
-    /// difference between a hit that reads and one that is invisible.
+    /// Animates the attack and defensive reactions. The authored Slash_A clip
+    /// carries the body (chest, shoulders, head, legs), while procedural code
+    /// drives the weapon pivot for precision and controls blade glow and deflect stance.
     private void TickSwing(float delta)
     {
         _combat ??= _player.GetNodeOrNull<Combat.CombatController>("CombatController");
         if (_skel == null) return;
 
-        bool parrying = _combat != null && _combat.IsParrying;
-        bool swinging = _combat != null && _combat.IsSwinging && !parrying;
+        // 1. Parry success: definite deflect / riposte stance
+        if (_parrySuccessTimer > 0f)
+        {
+            float ratio = Mathf.Clamp(_parrySuccessTimer / 0.28f, 0f, 1f);
+            PoseBone(_upperArm, Mathf.DegToRad(_parrySuccessIsPerfect ? -85f : -70f), _restUpperArm, delta, true);
+            PoseBone(_lowerArm, Mathf.DegToRad(_parrySuccessIsPerfect ? -85f : -75f), _restLowerArm, delta, true);
 
-        // Guard pose. A parry with no pose is a parry the player cannot see
-        // working, and the difference between the two kinds has to be visible
-        // too: the blade comes up across the body either way, and glows WHITE
-        // while the perfect window is open, amber after it has closed. The
-        // colour is the only thing separating "you are safe" from "you are safe
-        // and about to punish".
+            if (_modelRoot != null)
+            {
+                float lean = _parrySuccessIsPerfect ? -7f : -3f;
+                _modelRoot.RotationDegrees = new Vector3(lean * ratio, _modelRoot.RotationDegrees.Y, _modelRoot.RotationDegrees.Z);
+            }
+
+            if (_swingPivot != null)
+                _swingPivot.RotationDegrees = new Vector3(30f * ratio, 0f, 0f);
+
+            Color glow = _parrySuccessIsPerfect ? new Color(1f, 0.88f, 0.35f) : new Color(0.75f, 0.9f, 1f);
+            float energy = (_parrySuccessIsPerfect ? 5.5f : 3.0f) * ratio;
+            SetWeaponGlow(glow, energy);
+            return;
+        }
+
+        // 2. Active parry guard
+        bool parrying = _combat != null && _combat.IsParrying;
         if (parrying)
         {
             _swingReleaseTimer = 0.2f;
             PoseBone(_upperArm, Mathf.DegToRad(-70f), _restUpperArm, delta, true);
             PoseBone(_lowerArm, Mathf.DegToRad(-75f), _restLowerArm, delta, true);
-            SetWeaponGlow(_combat.ParryIsPerfectNow
-                ? new Color(1f, 1f, 0.95f)
-                : new Color(1f, 0.7f, 0.25f),
-                _combat.ParryIsPerfectNow ? 4.5f : 1.6f);
+
+            // Snappy discrete tell at window onset (first 70ms) transitioning into the perfect/block state
+            bool isOnset = _combat.ParryHeldFor < 0.07f;
+            Color glowColor = isOnset
+                ? new Color(1f, 1f, 1f)
+                : (_combat.ParryIsPerfectNow ? new Color(1f, 0.95f, 0.85f) : new Color(1f, 0.65f, 0.22f));
+            float energy = isOnset
+                ? 6.0f
+                : (_combat.ParryIsPerfectNow ? 4.2f : 1.6f);
+
+            SetWeaponGlow(glowColor, energy);
             return;
         }
+
+        // 3. Attack swing: Slash_A drives the body bones; procedural code drives the weapon pivot & glow
+        bool swinging = _combat != null && _combat.IsSwinging;
+        if (swinging)
+        {
+            _swingReleaseTimer = 0.25f;
+            float t = _combat.SwingProgress;
+            float arc = _combat.SwingIsHeavy ? SwingArcDegrees * 1.25f : SwingArcDegrees;
+            float weaponAngle = Mathf.Lerp(-arc * 0.4f, arc * 0.6f, t);
+
+            if (_swingPivot != null)
+                _swingPivot.RotationDegrees = new Vector3(weaponAngle, 0f, 0f);
+
+            if (_combat.IsActivePhase)
+            {
+                Color glow = _combat.SwingIsHeavy ? new Color(1f, 0.45f, 0.2f) : new Color(0.85f, 0.95f, 1f);
+                float energy = _combat.SwingIsHeavy ? 2.5f : 1.5f;
+                SetWeaponGlow(glow, energy);
+            }
+            else
+            {
+                SetWeaponGlow(new Color(1f, 1f, 1f), 0f);
+            }
+            return;
+        }
+
+        // 4. Return weapon pivot and glow to rest
+        if (_swingReleaseTimer > 0f) _swingReleaseTimer -= delta;
+        if (_swingPivot != null && _swingPivot.RotationDegrees != Vector3.Zero)
+            _swingPivot.RotationDegrees = _swingPivot.RotationDegrees.Lerp(Vector3.Zero, 14f * delta);
+
+        if (_modelRoot != null && _modelRoot.RotationDegrees.X != 0f)
+            _modelRoot.RotationDegrees = new Vector3(Mathf.Lerp(_modelRoot.RotationDegrees.X, 0f, 12f * delta), _modelRoot.RotationDegrees.Y, _modelRoot.RotationDegrees.Z);
+
         SetWeaponGlow(new Color(1f, 1f, 1f), 0f);
-
-
-        // Hands off the skeleton unless a swing is happening or just ended.
-        // Writing bone poses every frame would override the run cycle's own arm
-        // motion and leave the character running with a stiff arm -- trading one
-        // reported animation bug for another.
-        if (swinging) _swingReleaseTimer = 0.25f;
-        else if (_swingReleaseTimer > 0f) _swingReleaseTimer -= (float)delta;
-        if (!swinging && _swingReleaseTimer <= 0f) return;
-        float t = swinging ? _combat.SwingProgress : 0f;
-        float scale = swinging && _combat.SwingIsHeavy ? 1.3f : 1f;
-
-        // Pose the ARM, not just the weapon. Rotating the prop on its bone was
-        // a wrist flick: the blade moved, the character did not, and at this
-        // camera distance it read as "he crouches slightly and you cannot see
-        // the sword". There is no attack clip to play -- the free KayKit pack
-        // ships none -- so the swing is built from bone poses.
-        //
-        // Raise behind the head, then drive down and forward. The upper arm
-        // carries the arc, the forearm follows a beat later so the blade is not
-        // a rigid stick, and the chest twists into it.
-        float lift  = swinging ? SwingCurve(t, -110f, 85f) : 0f;
-        float elbow = swinging ? SwingCurve(Mathf.Clamp(t - 0.12f, 0f, 1f), -50f, 20f) : 0f;
-        float twist = swinging ? Mathf.Sin(t * Mathf.Pi) * SwingLeanDegrees : 0f;
-
-        PoseBone(_upperArm, Mathf.DegToRad(lift * scale), _restUpperArm, delta, swinging);
-        PoseBone(_lowerArm, Mathf.DegToRad(elbow * scale), _restLowerArm, delta, swinging);
-
-        if (_modelRoot != null)
-            _modelRoot.RotationDegrees = new Vector3(
-                Mathf.Lerp(_modelRoot.RotationDegrees.X, twist * scale, swinging ? 0.5f : 12f * delta),
-                _modelRoot.RotationDegrees.Y, _modelRoot.RotationDegrees.Z);
     }
 
     /// Lights the blade. Found by BONE rather than by node name: Godot forbids
@@ -300,15 +379,26 @@ public partial class PlayerVisual : Node3D
         return looped;
     }
 
-    private void Play(string clipName)
+    private void Play(string clipName) => PlayClip(clipName, false);
+
+    private void PlayClip(string clipName, bool restart)
     {
-        if (clipName == _current) return;
+        if (!restart && clipName == _current) return;
 
         foreach (var full in _anim.GetAnimationList())
         {
             if (!full.EndsWith("/" + clipName) && full != clipName) continue;
-            _anim.Play(full, CrossFade);
-            _current = clipName;
+            if (restart)
+            {
+                _anim.Play(full, 0.04f);
+                _anim.Seek(0, true);
+                _current = clipName;
+            }
+            else
+            {
+                _anim.Play(full, CrossFade);
+                _current = clipName;
+            }
             return;
         }
     }

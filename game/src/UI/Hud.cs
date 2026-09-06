@@ -26,6 +26,7 @@ public partial class Hud : Control
     private ProgressBar _bossBar;
     private Label _bossLabel;
     private Label _roomLabel;
+    private ColorRect _parryFlash;
 
     public override void _Ready()
     {
@@ -77,6 +78,7 @@ public partial class Hud : Control
 
         BuildBossBar();
         BuildRoomLabel();
+        BuildParryFlash();
 
         if (EventBus.Instance != null)
         {
@@ -88,6 +90,7 @@ public partial class Hud : Control
             EventBus.Instance.RunCompleted += OnRunCompleted;
             EventBus.Instance.BossStateChanged += OnBossStateChanged;
             EventBus.Instance.RoomEntered += OnRoomEntered;
+            EventBus.Instance.Parried += OnParried;
             EventBus.Instance.LevelTransitionRequested += (_, _) =>
             {
                 if (_runCompleteBanner != null) _runCompleteBanner.Visible = false;
@@ -106,6 +109,7 @@ public partial class Hud : Control
             EventBus.Instance.CheckpointReached -= OnCheckpointReached;
             EventBus.Instance.BossStateChanged -= OnBossStateChanged;
             EventBus.Instance.RoomEntered -= OnRoomEntered;
+            EventBus.Instance.Parried -= OnParried;
         }
 
         if (_checkpointTimer != null)
@@ -270,6 +274,36 @@ public partial class Hud : Control
         // Warden" are the same fact, and only one of them tells you to be
         // ready for it.
         _roomLabel.Text = index >= total - 1 ? "THE WARDEN" : $"Room {index + 1} of {total}";
+    }
+
+    private void BuildParryFlash()
+    {
+        _parryFlash = new ColorRect
+        {
+            Name = "ParryFlash",
+            Color = new Color(1f, 0.9f, 0.45f, 0f),
+            Visible = false,
+            MouseFilter = MouseFilterEnum.Ignore,
+        };
+        _parryFlash.SetAnchorsPreset(LayoutPreset.FullRect);
+        AddChild(_parryFlash);
+    }
+
+    private void OnParried(bool perfect, Vector3 atPosition)
+    {
+        if (!perfect || _parryFlash == null || !IsInsideTree()) return;
+        _parryFlash.Visible = true;
+        _parryFlash.Color = new Color(1f, 0.92f, 0.5f, 0.26f);
+        var tween = CreateTween();
+        if (tween == null) return;
+        tween.TweenProperty(_parryFlash, "color:a", 0f, 0.16f)
+             .SetTrans(Tween.TransitionType.Quad)
+             .SetEase(Tween.EaseType.Out);
+        tween.TweenCallback(Callable.From(() =>
+        {
+            if (_parryFlash != null && IsInstanceValid(_parryFlash))
+                _parryFlash.Visible = false;
+        }));
     }
 
     private void UpdateHealthLabel()
