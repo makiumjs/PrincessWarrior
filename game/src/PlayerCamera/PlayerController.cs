@@ -108,6 +108,14 @@ public partial class PlayerController : CharacterBody3D, IDamageable
 
     private float _lockedZ;
     private bool _wasOnFloor;
+
+    /// How fast the player was falling on the frame it touched down, kept
+    /// because the landing is detected after the velocity has been zeroed.
+    private float _fallSpeedOnLanding;
+
+    /// Below this, a landing raises nothing. Roughly the speed reached falling
+    /// off a knee-high ledge.
+    [Export] public float DustLandingSpeed = 7f;
     private bool _doubleJumpUsed;
 
     private float _coyoteTimer;
@@ -299,6 +307,7 @@ public partial class PlayerController : CharacterBody3D, IDamageable
         ResolveFacingRotation();
         ResolvePostMoveState(grounded, moveAxis);
 
+        if (!IsOnFloor()) _fallSpeedOnLanding = Mathf.Max(0f, -Velocity.Y);
         _wasOnFloor = IsOnFloor();
     }
 
@@ -356,6 +365,18 @@ public partial class PlayerController : CharacterBody3D, IDamageable
 
         CurrentState = MovementState.Dash;
         EventBus.Instance?.EmitDashed();
+
+        // A streak thrown BEHIND the dash. It is the only thing on screen that
+        // says how long the invulnerable window is, and the window is the whole
+        // reason to press the button.
+        Combat.ImpactBurst.Spawn(
+            GetParent(),
+            GlobalPosition + new Vector3(-FacingSign * 0.3f, -0.35f, 0f),
+            new Color(0.78f, 0.86f, 0.95f),
+            reach: 1.1f,
+            life: 0.22f,
+            flatten: 0.3f,
+            drift: -FacingSign * 1.1f);
     }
 
     private void TickDash(float dt, ref Vector3 velocity)
@@ -440,7 +461,23 @@ public partial class PlayerController : CharacterBody3D, IDamageable
         if (nowGrounded)
         {
             if (!_wasOnFloor)
+            {
                 EventBus.Instance?.EmitLanded();
+
+                // Dust, and only for a landing worth marking. Every step off a
+                // 20cm ledge raising a cloud is worse than no dust at all: the
+                // effect stops meaning "that was a drop" and starts meaning
+                // "you touched the ground". The threshold is a fall speed, not
+                // a height, because that is what the impact actually is.
+                if (_fallSpeedOnLanding > DustLandingSpeed)
+                    Combat.ImpactBurst.Spawn(
+                        GetParent(),
+                        GlobalPosition + new Vector3(0f, -0.75f, 0f),
+                        new Color(0.72f, 0.66f, 0.56f),
+                        reach: 0.55f + Mathf.Min(_fallSpeedOnLanding, 22f) * 0.035f,
+                        life: 0.30f,
+                        flatten: 0.15f);
+            }
 
             _doubleJumpUsed = false;
 

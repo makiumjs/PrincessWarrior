@@ -1089,6 +1089,28 @@ Main.tscn reports `present=False glow=False` and fails -- which is the failure
 this project keeps having, a thing that exists in one scene and not in the one
 that ships.
 
+## Dust, and the half of the rule that matters
+
+A landing raises dust and a dash throws a streak behind it -- both from the
+same six shards the impact bursts already use, for the cost of two arguments:
+one that squashes the fan toward the horizontal, one that pushes it one way.
+
+**The threshold is the point, not the effect.** Dust on every touch of the
+floor is worse than none at all: it stops meaning "that was a drop" and starts
+meaning "you are standing somewhere". So it is gated on a fall SPEED rather
+than a height, because speed is what the impact is, and the check asserts both
+halves -- a 0.35m step raises 0, a 7m drop raises 1. Both mutations fail:
+deleting the dust, and deleting the threshold.
+
+The dash streak is thrown backwards along the direction of travel. It is the
+only thing on screen that says how long the invulnerable window lasts, and that
+window is the entire reason to press the button.
+
+Two faults in the check, kept separate from the feature: it counted bursts
+under the ROOM, but the player is a child of Main so its dust is parented
+there; and it sampled a single instant when a 7m drop takes about 50 frames and
+a burst lives 18, so one sample could land on the wrong side of both.
+
 ## What is genuinely open
 
 - **Tuning by feel, and it is now the only thing left that a check cannot

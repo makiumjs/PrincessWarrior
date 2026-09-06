@@ -28,17 +28,34 @@ public partial class ImpactBurst : Node3D
     private float _t;
     private float _life = 0.28f;
     private float _reach = 1f;
+    private float _flatten = 1f;
+    private float _drift;
     private MeshInstance3D[] _pieces;
     private Vector3[] _dirs;
     private StandardMaterial3D _mat;
 
     /// <param name="host">Node the burst is parented to. The room, normally,
     /// so a teardown takes it with it.</param>
-    public static void Spawn(Node host, Vector3 at, Color tint, float reach = 1f, float life = 0.28f)
+    /// <param name="flatten">Squashes the fan toward the horizontal. 1 is the
+    /// even spray a blow makes; 0.15 is what dust does when something lands on
+    /// it -- it goes sideways, not up. The same six shards either way: a second
+    /// effect for the cost of an argument.</param>
+    /// <param name="drift">Pushes the whole fan one way. A dash leaves its dust
+    /// BEHIND it, and a spray that ignores which way you were going reads as a
+    /// puff rather than as speed.</param>
+    public static void Spawn(Node host, Vector3 at, Color tint, float reach = 1f, float life = 0.28f,
+                             float flatten = 1f, float drift = 0f)
     {
         if (host == null || !GodotObject.IsInstanceValid(host)) return;
 
-        var burst = new ImpactBurst { Name = "ImpactBurst", _reach = reach, _life = life };
+        var burst = new ImpactBurst
+        {
+            Name = "ImpactBurst",
+            _reach = reach,
+            _life = life,
+            _flatten = flatten,
+            _drift = drift,
+        };
         host.AddChild(burst);
         burst.GlobalPosition = at;
         burst.Build(tint);
@@ -71,7 +88,9 @@ public partial class ImpactBurst : Node3D
             // shards thrown along Z would be hidden behind the character by an
             // orthographic camera looking straight down it.
             float a = Mathf.Tau * i / Shards + 0.31f;
-            _dirs[i] = new Vector3(Mathf.Cos(a), Mathf.Sin(a) * 0.8f + 0.25f, 0f).Normalized();
+            _dirs[i] = new Vector3(Mathf.Cos(a) + _drift,
+                                   (Mathf.Sin(a) * 0.8f + 0.25f) * _flatten,
+                                   0f).Normalized();
 
             var piece = new MeshInstance3D { Mesh = mesh, MaterialOverride = _mat };
             AddChild(piece);

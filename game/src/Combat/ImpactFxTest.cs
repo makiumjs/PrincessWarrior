@@ -34,6 +34,9 @@ public partial class ImpactFxTest : Node
     private float _shakeAfterParry;
     private int _burstsAtPeak;
     private int _burstsAfterLife = -1;
+    private float _floorY;
+    private int _burstsAfterStep = -1;
+    private int _burstsAfterFall = -1;
 
     public override void _Process(double delta)
     {
@@ -109,10 +112,53 @@ public partial class ImpactFxTest : Node
             return;
         }
 
-        // Every burst lives 0.32s at most. 60 frames at 60fps is a full second.
-        if (_f == 190)
+        // -- Part 4: the ground answers a landing, in proportion ------------
+        //
+        // Dust on every touch of the floor is worse than none: it stops meaning
+        // "that was a drop" and starts meaning "you are standing somewhere".
+        // So both halves are checked -- a real fall raises it, a step does not.
+        if (_f == 200) { _room.RebuildAs(0); return; }
+
+        if (_f == 230)
         {
-            _burstsAfterLife = Count<ImpactBurst>(_room);
+            var player = GetTree().GetFirstNodeInGroup("player") as Node3D;
+            if (player == null) { Done(false, "no player"); return; }
+            _floorY = player.GlobalPosition.Y;
+            // A step, not a fall.
+            player.GlobalPosition = new Vector3(player.GlobalPosition.X, _floorY + 0.35f, 0f);
+            return;
+        }
+
+        if (_f == 250)
+        {
+            // From the ROOT, not the room: the player is a child of Main, so
+            // the dust it kicks up is parented there and a room-only count sees
+            // none of it. The parry line below already knew that; these did not.
+            _burstsAfterStep = Count<ImpactBurst>(GetTree().Root);
+            var player = GetTree().GetFirstNodeInGroup("player") as Node3D;
+            // Now a drop worth marking.
+            player.GlobalPosition = new Vector3(player.GlobalPosition.X, _floorY + 7f, 0f);
+            return;
+        }
+
+        // Sampled over a window, not at an instant: a 7m drop takes about 50
+        // frames and a burst lives 18, so a single sample can fall on either
+        // side of both.
+        if (_f > 255 && _f < 340)
+            _burstsAfterFall = Mathf.Max(_burstsAfterFall, Count<ImpactBurst>(GetTree().Root));
+
+        if (_f == 340)
+        {
+            _burstsAfterFall = Mathf.Max(_burstsAfterFall, Count<ImpactBurst>(GetTree().Root));
+            GD.Print($"[FX] a 0.35m step raised {_burstsAfterStep} burst(s); " +
+                     $"a 7m drop raised {_burstsAfterFall}");
+            return;
+        }
+
+        // Every burst lives 0.32s at most. 60 frames at 60fps is a full second.
+        if (_f == 430)
+        {
+            _burstsAfterLife = Count<ImpactBurst>(GetTree().Root);
             GD.Print($"[FX] one second later: bursts still alive={_burstsAfterLife}");
 
             bool ok = _sawHitBurst
@@ -120,6 +166,8 @@ public partial class ImpactFxTest : Node
                    && _hitTint != _absorbedTint      // absorbed does not look like landed
                    && _sawParryBurst
                    && _shakeAfterParry > 0.1f        // the parry is felt, not only heard
+                   && _burstsAfterStep == 0          // a step raises no dust
+                   && _burstsAfterFall > 0           // a real drop does
                    && _burstsAfterLife == 0;         // and nothing is left behind
 
             Done(ok, ok ? "impacts are visible, absorbed ones look different, and none linger" : "");

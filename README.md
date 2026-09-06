@@ -135,7 +135,8 @@ Sixty-one checks, in order:
     not interrupt; parried open, the same blow lands in full; and the run
     cannot end while it lives
 52. a landed blow, a blow absorbed by armour and a perfect parry each leave a
-    different mark, the camera is punched, and none of it accumulates
+    different mark, the camera is punched, a real drop raises dust while a step
+    does not, and none of it accumulates
 53. the options screen opens from the title, a key already taken by another
     action is refused, and a rebind is still there after a restart
 54. an enemy turns to face the player mid-attack, and a stationary one turns
