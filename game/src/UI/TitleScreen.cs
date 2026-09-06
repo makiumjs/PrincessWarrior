@@ -31,6 +31,7 @@ public partial class TitleScreen : Control
     };
 
     private Button _playButton;
+    private Button _continueButton;
     private Button _optionsButton;
     private Button _quitButton;
     private OptionsMenu _options;
@@ -43,12 +44,19 @@ public partial class TitleScreen : Control
         Core.InputSettings.EnsureApplied();
 
         _playButton = GetNode<Button>("%PlayButton");
+        _continueButton = GetNode<Button>("%ContinueButton");
         _optionsButton = GetNode<Button>("%OptionsButton");
         _quitButton = GetNode<Button>("%QuitButton");
         _options = GetNode<OptionsMenu>("%OptionsMenu");
 
         _playButton.Pressed += OnPlayPressed;
+        _continueButton.Pressed += OnContinuePressed;
         _optionsButton.Pressed += OnOptionsPressed;
+
+        // Offered only when there is something to continue. A Continue that
+        // starts room 0 with nothing unlocked is a second New run wearing a
+        // different label, and the player finds that out by pressing it.
+        _continueButton.Visible = ResumeRoom() > 0;
         _quitButton.Pressed += OnQuitPressed;
         _options.Closed += OnOptionsClosed;
 
@@ -62,18 +70,48 @@ public partial class TitleScreen : Control
     public override void _ExitTree()
     {
         if (_playButton != null) _playButton.Pressed -= OnPlayPressed;
+        if (_continueButton != null) _continueButton.Pressed -= OnContinuePressed;
         if (_optionsButton != null) _optionsButton.Pressed -= OnOptionsPressed;
         if (_quitButton != null) _quitButton.Pressed -= OnQuitPressed;
         if (_options != null) _options.Closed -= OnOptionsClosed;
     }
 
+    /// A NEW run, and that means new: the save is wiped before the game scene
+    /// loads. Without this, "New run" started at room 0 with every ability
+    /// already unlocked, because SaveManager restores them on boot -- which is
+    /// not a new run, it is the old one with the level reset.
     private void OnPlayPressed()
     {
-        // The tree can still be paused if the player reached the title from a
-        // paused game; starting into a paused tree looks like a frozen game,
-        // which is exactly the bug the pause menu's Restart had.
+        LostCrownlike.Save.SaveManager.Instance?.ResetSave();
+        StartGameScene();
+    }
+
+    /// Shared by both entry points. The tree can still be paused if the player
+    /// reached the title from a paused game; starting into a paused tree looks
+    /// like a frozen game, which is exactly the bug the pause menu had.
+    private void StartGameScene()
+    {
         GetTree().Paused = false;
         GetTree().ChangeSceneToFile(GameScene);
+    }
+
+    /// The room a Continue would open at: how far the run got, unless the run
+    /// is finished, in which case there is nothing to go back to.
+    private static int ResumeRoom()
+    {
+        var save = LostCrownlike.Save.SaveManager.Instance?.Current;
+        if (save == null || save.RunCompleted) return 0;
+        return save.RoomsCleared;
+    }
+
+    /// Picks up where the save left off, with the abilities it recorded --
+    /// SaveManager already re-announces those on boot, so nothing extra is
+    /// needed to restore them.
+    private void OnContinuePressed()
+    {
+        var manager = LostCrownlike.Save.SaveManager.Instance;
+        if (manager != null) manager.ResumeFromRoom = ResumeRoom();
+        StartGameScene();
     }
 
     private void OnOptionsPressed()

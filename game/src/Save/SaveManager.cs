@@ -118,6 +118,25 @@ public partial class SaveManager : Node
         GD.Print($"SaveManager: restored {Current.UnlockedAbilities} from the save");
     }
 
+    /// Which room the next build should open at, set by the title screen and
+    /// consumed once by the room builder.
+    ///
+    /// It lives here rather than in a static or on the bus because this is the
+    /// autoload that already owns run progression, and because it has to
+    /// survive a scene change: the title screen calls ChangeSceneToFile, so a
+    /// signal emitted before the game exists has nobody listening, and a field
+    /// on the builder does not exist yet either.
+    public int ResumeFromRoom { get; set; }
+
+    /// Reads the intent and clears it, so a later rebuild in the same session
+    /// starts where it is told to rather than jumping back to the resume point.
+    public int TakeResumeRoom()
+    {
+        int room = ResumeFromRoom;
+        ResumeFromRoom = 0;
+        return room;
+    }
+
     /// Records how far the run has got. Only generated rooms are counted, and
     /// only upward: RoomsCleared is a high-water mark, so dying back to an
     /// earlier checkpoint does not push the ending further away.

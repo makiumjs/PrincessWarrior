@@ -141,6 +141,16 @@ public partial class DungeonRoomBuilder : Node3D
             Core.EventBus.Instance.RestartRequested += RestartRun;
         }
 
+        // A run that is ten rooms and twelve minutes long cannot only be
+        // played in one sitting. The title offers Continue when the save has
+        // progress in it; this is where that lands.
+        int resume = Save.SaveManager.Instance?.TakeResumeRoom() ?? 0;
+        if (resume > 0 && resume < RunLength)
+        {
+            RoomIndex = resume;
+            GD.Print($"[Run] resuming at room {RoomIndex}");
+        }
+
         if (UseMicroChunks)
         {
             BuildFromChunks();

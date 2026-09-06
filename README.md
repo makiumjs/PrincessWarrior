@@ -69,7 +69,7 @@ at a class the running assembly does not have yet produced four engine errors
 in checks that had nothing to do with the edit. Both times the result looked
 like a finding and was an artefact.
 
-Fifty-nine checks, in order:
+Sixty checks, in order:
 
 1. the build compiles
 2. the main scene boots without errors
@@ -144,7 +144,9 @@ Fifty-nine checks, in order:
     population ten seconds later
 58. the game exports to a Windows binary whose .NET assemblies are present,
     and that binary starts with its C# autoloads running
-59. no check from 3 onward printed an engine error while reaching its own PASS
+59. the title offers Continue only when there is progress, it resumes the
+    saved room, and a new run starts over with nothing
+60. no check from 3 onward printed an engine error while reaching its own PASS
 
 **One unresolved intermittent.** The engine-quiet check fired on two consecutive gate runs
 immediately after a rebuild, naming engine errors, and has passed on the

@@ -30,7 +30,7 @@ first three rooms and is at maximum for the last three.
 
 ## What is proven, and by what
 
-`bash tools/verify.sh` — 59 checks, currently all green, and green on the last
+`bash tools/verify.sh` — 60 checks, currently all green, and green on the last
 sixteen consecutive full runs. Two runs before those failed the engine-quiet check (
 errors) immediately after a rebuild and have not reproduced since; the gate now
 saves the evidence to `tools/.engine-errors.log` when that check fires, because
@@ -873,6 +873,36 @@ a person.
 
 The templates themselves are ~1.2 GB and are **not** in the repository; the
 header of `tools/export.sh` has the three commands that install them.
+
+## A twelve-minute run needed a way back into it
+
+The title has two doors now: **New run** and **Continue**, the second offered
+only when the save has progress that is not a finished run.
+
+The interesting half is the first door. "Play" was never a new run: SaveManager
+re-announces the saved abilities on boot, so pressing it opened room 0 **with
+DoubleJump and Dash already in hand and four rooms counted** -- the old run
+with the level reset. Measured exactly that way with the fix removed. It wipes
+the save before loading now.
+
+The resume point crosses the scene change on `SaveManager.ResumeFromRoom`,
+consumed once by the room builder. It lives on the save autoload rather than in
+a static or on the bus because that is the subsystem that already owns run
+progression, and because a signal emitted before the game scene exists has
+nobody listening.
+
+The check had to be built around two engine facts, both already paid for
+elsewhere in this suite: it reparents itself to the root, because pressing
+either button calls `ChangeSceneToFile` and that frees the current scene
+(the first version went with it and printed two of its five lines); and it
+reads the intent in the **same frame** as the press, because `Pressed` is
+synchronous while the scene change is deferred, and one frame later the builder
+has consumed the value.
+
+One failure in it was the check's own: it asserted "Continue is hidden" against
+a save that still had four rooms in it, because the scene's title node ran its
+`_Ready` before the test could reset. It resets first and builds a fresh title
+now -- which is also what relaunching the game does.
 
 ## The project is under version control
 
