@@ -117,7 +117,7 @@ Sixty-one checks, in order:
 36. a reactive bot plays all ten rooms of a full run end to end with real
     button presses and reaches each exit trigger
 37. a wall shaft of the size the generator builds can actually be climbed
-38. five of the chunk kinds are each clearable alone at full difficulty
+38. every one of the eight chunk kinds is clearable alone at full difficulty
 39. clips that describe a continuing state loop, on the player and on enemies
 40. a finished run can be restarted, and the save stops claiming it is finished
 41. every checkpoint in the hardest room stands on ground

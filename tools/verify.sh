@@ -358,19 +358,22 @@ step "37/61  Wall jumps actually climb"
 run_scene_test "wall jumps gain height" scenes/tests/WallShaftClimb.tscn SHAFT   "a shaft of the size the generator builds can be climbed" "--fixed-fps 60"
 
 step "38/61  Individual chunks at full difficulty"
-# The difficulty ramp saturates at room index 3, so rooms 3-5 build the hardest
-# version of every chunk -- and those are the rooms the bot cannot finish. A
-# whole room is too coarse to tell "the bot is not good enough" from "this
+# A whole room is too coarse to tell "the bot is not good enough" from "this
 # chunk is unclearable", so each chunk is built alone, flanked by flat ground,
 # at intensity 1.0.
 #
-# SCOPE, deliberately narrow: the five chunks the bot demonstrably clears.
-# Chimney and DashGap are excluded and recorded in STATUS.md with their
-# measurements, because asserting them would encode how good this bot is rather
-# than whether the game is playable -- the bot falls into the dash gap, and at
-# the chimney it stands at the foot fighting a grunt (91 attack presses) instead
-# of climbing.
-run_scene_test "each chunk clears at full difficulty" scenes/tests/ChunkClearance.tscn BOT   "StepUp, Gap, WallShaft, Spikes and Arena are each clearable at intensity 1.0" "--fixed-fps 60"
+# ALL of them now. Chimney and DashGap used to be excluded, recorded with their
+# measurements, because the bot fell into the dash gap and stood at the foot of
+# the chimney fighting a grunt (91 attack presses) instead of climbing. Retried
+# after the per-room budget became proportional to the room: both cross, in 177
+# and 219 frames. Drop is new and included from the start.
+#
+# One thing the numbers say that the pass does not: the bot climbs the chimney
+# on WALL JUMPS, not double jumps -- 2 wall jumps, 0 double jumps, 3.8 metres of
+# the 3.7 it needed. The chunk that exists to teach Double Jump can be answered
+# another way. That is a design note, not a failure: the claim here is that each
+# chunk is clearable with what it grants, and it is.
+run_scene_test "each chunk clears at full difficulty" scenes/tests/ChunkClearance.tscn BOT   "all eight chunk kinds are clearable alone at intensity 1.0" "--fixed-fps 60"
 
 step "39/61  Continuing animations loop"
 # Reported from play, missed by every check here: after 0.80s of Running_A the

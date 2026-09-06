@@ -9,4 +9,4 @@
 
 [node name="Test" type="Node" parent="."]
 script = ExtResource("2_test")
-ChunksToTest = PackedStringArray("StepUp", "Gap", "WallShaft", "Spikes", "Arena")
+ChunksToTest = PackedStringArray("StepUp", "Gap", "WallShaft", "Spikes", "Arena", "Drop", "DashGap", "Chimney")

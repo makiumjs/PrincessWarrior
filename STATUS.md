@@ -1034,12 +1034,32 @@ frame dumps (35 MB) are excluded, with the reason written next to each rule in
 `.gitignore`. What is committed is 5.4 MB: the source, the scenes, the imported
 assets the game actually loads, and the docs.
 
+## Every chunk is proven alone now
+
+Chimney and DashGap had been excluded from the isolation check for months,
+with their measurements written beside the exclusion: the bot fell into the
+dash gap, and at the foot of the chimney it stood fighting a grunt -- **91
+attack presses** -- instead of climbing. The reason given was sound at the
+time: asserting them would have encoded how good the bot is rather than
+whether the game is playable.
+
+Retried after the per-room budget became proportional to the room's length.
+Both cross, in 177 and 219 frames. Drop, which is new, is included from the
+start. Eight of eight.
+
+One number in the pass says something the pass does not. The bot climbs the
+chimney on **wall jumps, not double jumps** -- 2 wall jumps, 0 double jumps,
+3.8 metres of the 3.7 it needed. The chunk built to teach Double Jump can be
+answered another way, because the sides of its ledges are climbable surfaces.
+Not a failure -- the claim is that each chunk is clearable with what it grants,
+and it is -- but it is worth having written down rather than discovered by a
+player.
+
 ## What is genuinely open
 
 - **Tuning by feel.** The parry's 0.14s perfect window, six rooms, the
   difficulty ramp -- all defensible on paper, none confirmed by playing.
-- **Chimney and DashGap are unproven in isolation.** Both cross fine inside a
-  real room, so the exclusion is about the bot meeting them cold with no run-up.
+
 
 ## The gate was audited against itself
 
