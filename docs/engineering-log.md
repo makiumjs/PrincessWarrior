@@ -1221,3 +1221,55 @@ good as the sample it sits on; an instrument that cannot see every event will
 report the ones it caught as though they were all of them; and a mutation that
 does not move a number is telling you something about the pairing, not about the
 mechanic.
+
+## The parry that had no arm, the arrow that was a box, and the legs that stopped
+
+Three reports from play, and each one turned out to be a different kind of gap.
+
+**"The sword glows slightly but it is not a parry."** The hit-stop was already
+there -- 120ms on a perfect parry, 50 on a block -- and `PerfectParryMs` was
+already 220, which makes the window reachable against every enemy. What was
+missing was the pose. There had been an attempt at one: two `PoseBone` calls
+nudging `upperarm.r` and `lowerarm.r`. They never showed, because the
+AnimationPlayer was driving those same bones from `Idle_A` or `Running_A` every
+frame. A single bone pushed against a full-body clip loses.
+
+`Parry_A` is authored in `tools/anim/build_slash.py` beside `Slash_A`, and it
+was looked at before it was believed: the first version brought the hand only to
+mid-chest and did not read as a guard at all. At `upperarm.r` X=66 with the
+elbow at 120 the fist reaches the chin with the forearm folded in front, which
+is a silhouette. The guard is up by frame 3 of 22 and then HOLDS -- the window
+is 380ms, and a pose still arriving when it closes is never seen.
+
+**"The archers fire beams of light."** A fair description: the bolt was a
+0.5x0.1x0.1 `BoxMesh`, albedo orange, emission 2.5. The pack ships
+`arrow_bow.gltf`. Two things had to be right and neither was guessed. The model
+is 1.26m down its own Z, so +90 degrees about Y lays it on the travel axis; and
+which end leads was read out of the vertex buffer rather than eyeballed -- the
+Z- end carries 48 vertices spread 0.163 wide, the Z+ end 25 spread 0.108, so the
+bushy end is the fletching and the tip is +Z. It mirrors with the shot, because
+an arrow flying left tail-first is worse than the box.
+
+**"Hit something while moving and the character slides."** The diagnosis that
+mattered came from a throwaway probe printing track paths: `Slash_A` has FIVE
+tracks -- chest, both upper arms, both forearms -- and touches no leg. The legs
+were not animated wrongly; they were not animated at all, because
+`AnimationPlayer` plays one clip and starting the swing stopped `Running_A`.
+
+The upper body is layered now, through an `AnimationTree` whose `OneShot` filter
+is built **from the action clip's own track list**. A hand-written list of five
+bone paths would be a second copy of what the clip already states, and it would
+go stale the first time the rig changes.
+
+One thing cost a red check on the way: `AnimationNodeAnimation` exposes its clip
+as a resource property, not as a blend parameter, so `parameters/loco/animation`
+wrote into nothing and the tree played silence.
+
+**The check for it needed three attempts, and the failures are the interesting
+part.** An absolute floor of 0.001 rad/frame passed on a body wholly replaced by
+the attack clip, which still measured 0.023. A ratio against legs running free
+passed too, and read 289% -- because that mutation collapses BOTH halves of the
+ratio, so the control controlled for nothing. A control only controls for what
+it does not share with the thing it is measuring. The bound is an absolute 0.05
+rad/frame, between a measured run cycle at 0.104 and a measured collapse at
+0.023, and it states what the mechanic is for rather than agreeing with itself.

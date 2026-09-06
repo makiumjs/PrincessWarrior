@@ -416,7 +416,20 @@ step "42/62  The model is still moving seconds later"
 # person spotted in seconds and forty checks did not, because every capture in
 # this project is a single frame and a stopped clip photographs exactly like a
 # playing one.
-run_scene_test "the run animation keeps advancing" scenes/tests/AnimationMotion.tscn MOTION   "the model is still animating three seconds into a run, not holding a pose" "--fixed-fps 60"
+# Extended after "attack while running and the character slides" was reported
+# from play. Slash_A has five tracks -- chest and arms -- and touches no leg;
+# the legs stopped because AnimationPlayer plays ONE clip, so starting a swing
+# stopped the run and left them holding a pose while the body kept travelling.
+# The upper body is layered over the legs through an AnimationTree now, its
+# filter built from the action clip's own track list.
+#
+# The leg bound took two tries to mean anything, and both failures are the same
+# lesson: a floor of 0.001 rad passed on a body wholly replaced by the attack
+# clip, which still measured 0.023; and a ratio against legs running free passed
+# too, reading 289% while nothing was running, because that mutation collapses
+# both halves of the ratio. It is an absolute 0.05 rad/frame now, between a
+# measured run cycle at 0.104 and a measured collapse at 0.023.
+run_scene_test "the run animation keeps advancing" scenes/tests/AnimationMotion.tscn MOTION   "the model still animates three seconds in, and the legs keep running through a swing" "--fixed-fps 60"
 
 step "43/62  Attacks can be seen coming"
 # The prerequisite for a parry, and worth having on its own. Every enemy used to

@@ -68,7 +68,43 @@ SLASH = [
     (20, REST),
 ]
 
-CLIPS = {'Slash_A': SLASH}
+# A parry, and it is a different SHAPE of motion from the swing, which is the
+# whole point: a swing travels across the body, a parry stops in front of it.
+#
+# Read from the side, the sword has to end up VERTICAL and between the camera
+# and the chest, because that is the silhouette a player recognises as "guard"
+# in one frame. Three things do that on this rig:
+#
+#   upperarm.r  X  lifts the whole arm. Throw uses -37..+23; a guard goes past
+#                  the top of that range, because the elbow is coming up, not
+#                  the hand going forward.
+#   lowerarm.r  Z  closes the elbow HARD -- 56 at rest, 31 extended in a throw,
+#                  and about 105 here. A parry is a folded arm; an extended one
+#                  reads as a reach.
+#   upperarm.l  braces across, so the body is not a single arm doing everything
+#                  while the rest of it stands around.
+#
+# The chest leans BACK, opposite to the slash. The slash leans into the blow it
+# is delivering; this one is receiving.
+#
+# The timing is front-loaded on purpose. The guard is up by frame 3 -- 0.12s --
+# and then HOLDS, because the parry window is 380ms and a pose that is still
+# arriving when the window closes never gets seen. The recovery is the slow part.
+PARRY = [
+    (0,  REST),
+    # Snap to guard. The shortest interval in the clip, and it is at the front.
+    (3,  {'upperarm.r': (48, -18, -5), 'lowerarm.r': (0, 0, 108),
+          'upperarm.l': (-20, 20, 22), 'chest': (-8, 6, 0)}),
+    (6,  {'upperarm.r': (66, -10, 4), 'lowerarm.r': (0, 0, 120),
+          'upperarm.l': (-12, 14, 28), 'chest': (-12, 8, 0)}),
+    # Hold. Identical to frame 6, so the guard sits still instead of drifting
+    # through the window the player is being asked to aim at.
+    (14, {'upperarm.r': (66, -10, 4), 'lowerarm.r': (0, 0, 120),
+          'upperarm.l': (-12, 14, 28), 'chest': (-12, 8, 0)}),
+    (22, REST),
+]
+
+CLIPS = {'Slash_A': SLASH, 'Parry_A': PARRY}
 
 
 def load_rig():
@@ -113,7 +149,7 @@ def setup_render(arm):
 
     cam_data = bpy.data.cameras.new('Cam')
     cam_data.type = 'ORTHO'
-    cam_data.ortho_scale = 2.6
+    cam_data.ortho_scale = 3.4
     cam = bpy.data.objects.new('Cam', cam_data)
     scene.collection.objects.link(cam)
     # From -X, at chest height, and both halves of that were paid for:

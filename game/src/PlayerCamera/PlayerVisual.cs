@@ -61,7 +61,7 @@ public partial class PlayerVisual : Node3D
     private float _parrySuccessTimer;
     private bool _parrySuccessIsPerfect;
     private int _lastComboStep = -1;
-    private bool _wasAttacking;
+    private bool _wasAttacking, _wasParrying;
 
     public override void _Ready()
     {
@@ -113,6 +113,124 @@ public partial class PlayerVisual : Node3D
         }
 
         MakeLoopable();
+        BuildBlendTree(character);
+    }
+
+    // ---- Upper body over legs ---------------------------------------------
+    //
+    // Reported from play: attack while running and the character SLIDES. The
+    // cause was not the attack clip. Slash_A has five tracks -- chest, both
+    // upper arms, both forearms -- and touches no leg at all; the legs stopped
+    // because AnimationPlayer plays ONE clip, so starting the swing stopped
+    // Running_A and left the legs in whatever pose they were holding.
+    //
+    // So the swing is layered instead of substituted. AnimationNodeOneShot
+    // blends the action over the locomotion, and its filter is built FROM THE
+    // ACTION CLIP'S OWN TRACK LIST rather than from five paths typed out here:
+    // the clip already states which bones it claims, and a hand-written filter
+    // is a second copy of that which goes stale the first time the rig changes.
+
+    private AnimationTree _tree;
+    // The clip lives on the NODE, not in the tree's parameter list:
+    // AnimationNodeAnimation exposes `animation` as a resource property and not
+    // as a blend parameter, so setting "parameters/loco/animation" writes into
+    // nothing and the tree plays silence. Cost one red check to find.
+    private AnimationNodeAnimation _locoNode, _actionNode;
+    private const string ScaleParam = "parameters/scale/scale";
+    private const string ShotRequest = "parameters/shot/request";
+    private const string ShotActive = "parameters/shot/active";
+
+    /// TEST SEAM. The action clip currently layered over the legs, short name,
+    /// empty when none is. With a tree driving the skeleton, AnimationPlayer's
+    /// own CurrentAnimation is empty and says nothing.
+    public string CurrentActionClip =>
+        _tree != null && _tree.Get(ShotActive).AsBool() ? _actionClip : "";
+
+    private string _actionClip = "", _locoClip = "";
+
+    private void BuildBlendTree(Node3D character)
+    {
+        _locoNode = new AnimationNodeAnimation();
+        _actionNode = new AnimationNodeAnimation();
+        var loco = _locoNode;
+        var action = _actionNode;
+        var scale = new AnimationNodeTimeScale();
+        var shot = new AnimationNodeOneShot
+        {
+            FadeInTime = 0.05,
+            FadeOutTime = 0.12,
+            FilterEnabled = true,
+        };
+
+        foreach (var path in ActionTrackPaths("Slash_A"))
+            shot.SetFilterPath(path, true);
+
+        var root = new AnimationNodeBlendTree();
+        root.AddNode("loco", loco);
+        root.AddNode("action", action);
+        root.AddNode("scale", scale);
+        root.AddNode("shot", shot);
+        root.ConnectNode("scale", 0, "action");
+        root.ConnectNode("shot", 0, "loco");
+        root.ConnectNode("shot", 1, "scale");
+        root.ConnectNode("output", 0, "shot");
+
+        _tree = new AnimationTree { Name = "AnimationTree", TreeRoot = root };
+        character.AddChild(_tree);
+        _tree.AnimPlayer = _tree.GetPathTo(_anim);
+        _tree.Active = true;
+    }
+
+    /// The bones an action clip claims, read off the clip. Slash_A and Parry_A
+    /// are authored on the same five, so one is enough to size the filter.
+    private Godot.Collections.Array<NodePath> ActionTrackPaths(string clip)
+    {
+        var paths = new Godot.Collections.Array<NodePath>();
+        string full = Full(clip);
+        if (full.Length == 0) return paths;
+        var a = _anim.GetAnimation(full);
+        for (int i = 0; i < a.GetTrackCount(); i++) paths.Add(a.TrackGetPath(i));
+        return paths;
+    }
+
+    private string Full(string clipName)
+    {
+        foreach (var f in _anim.GetAnimationList())
+            if (f == clipName || f.ToString().EndsWith("/" + clipName)) return f;
+        return "";
+    }
+
+    /// The legs. Switching this never interrupts an action: that is the point.
+    private void SetLoco(string clipName)
+    {
+        if (clipName == _locoClip) return;
+        string full = Full(clipName);
+        if (full.Length == 0) return;
+        _locoClip = clipName;
+        _locoNode.Animation = full;
+    }
+
+    /// Layers an action over the legs. `restart` re-fires the one-shot, which
+    /// is what a new combo step needs and what holding a guard does not.
+    private void SetAction(string clipName, float speed, bool restart)
+    {
+        string full = Full(clipName);
+        if (full.Length == 0) return;
+        if (clipName != _actionClip)
+        {
+            _actionClip = clipName;
+            _actionNode.Animation = full;
+            restart = true;
+        }
+        _tree.Set(ScaleParam, speed);
+        if (restart || !_tree.Get(ShotActive).AsBool())
+            _tree.Set(ShotRequest, (int)AnimationNodeOneShot.OneShotRequest.Fire);
+    }
+
+    private void StopAction()
+    {
+        if (_tree != null && _tree.Get(ShotActive).AsBool())
+            _tree.Set(ShotRequest, (int)AnimationNodeOneShot.OneShotRequest.FadeOut);
     }
 
     public override void _ExitTree()
@@ -135,36 +253,46 @@ public partial class PlayerVisual : Node3D
         bool parrying = _combat != null && _combat.IsParrying;
         bool attacking = _combat != null && _combat.IsAttacking && !parrying;
 
+        // The legs follow the movement state ALWAYS now, action or no action.
+        // That single line is the slide: they used to be switched off whenever
+        // an action clip took the player over.
+        SetLoco(ClipFor(_player.CurrentState));
+
         if (_parrySuccessTimer > 0f)
         {
             _parrySuccessTimer -= (float)delta;
-            _anim.SpeedScale = 1f;
-            PlayClip("Idle_A", restart: false);
+            // Holds the guard rather than dropping to rest. The deflect is the
+            // frame the player is being asked to read, and it used to be spent
+            // standing at rest with a glowing sword.
+            SetAction("Parry_A", 1f, restart: false);
+        }
+        else if (parrying)
+        {
+            // The guard is up by frame 3 of a 22-frame clip -- 0.12s of its
+            // 0.92s -- and the parry window is 380ms, so the clip is sped up to
+            // put the pose inside the window rather than arriving after it.
+            SetAction("Parry_A",
+                      0.92f / Mathf.Max(_combat.ParryWindowMs / 1000f, 0.05f),
+                      restart: !_wasParrying);
+            _wasParrying = true;
         }
         else if (attacking)
         {
             float totalDur = _combat.CurrentAttackTotalDuration;
-            float speed = 0.833f / Mathf.Max(totalDur, 0.05f);
-            _anim.SpeedScale = speed;
-
-            if (!_wasAttacking || _combat.ComboStep != _lastComboStep)
-            {
-                PlayClip("Slash_A", restart: true);
-                _lastComboStep = _combat.ComboStep;
-            }
-            else
-            {
-                PlayClip("Slash_A", restart: false);
-            }
+            bool fresh = !_wasAttacking || _combat.ComboStep != _lastComboStep;
+            SetAction("Slash_A", 0.833f / Mathf.Max(totalDur, 0.05f), restart: fresh);
+            _lastComboStep = _combat.ComboStep;
             _wasAttacking = true;
         }
         else
         {
             _wasAttacking = false;
+            _wasParrying = false;
             _lastComboStep = -1;
-            _anim.SpeedScale = 1f;
-            Play(ClipFor(_player.CurrentState));
+            StopAction();
         }
+
+        if (!parrying && _parrySuccessTimer <= 0f) _wasParrying = false;
 
         TickSwing((float)delta);
     }
@@ -181,8 +309,11 @@ public partial class PlayerVisual : Node3D
         if (_parrySuccessTimer > 0f)
         {
             float ratio = Mathf.Clamp(_parrySuccessTimer / 0.28f, 0f, 1f);
-            PoseBone(_upperArm, Mathf.DegToRad(_parrySuccessIsPerfect ? -85f : -70f), _restUpperArm, delta, true);
-            PoseBone(_lowerArm, Mathf.DegToRad(_parrySuccessIsPerfect ? -85f : -75f), _restLowerArm, delta, true);
+            // The arm is the CLIP's now. Posing the same bones from here fought
+            // whatever the AnimationPlayer was driving that frame -- which was
+            // Idle_A or Running_A, because the parry had no clip of its own --
+            // and a single bone nudged against a full-body pose is what "the
+            // sword lights up but it is not a parry" looked like.
 
             if (_modelRoot != null)
             {
@@ -204,8 +335,6 @@ public partial class PlayerVisual : Node3D
         if (parrying)
         {
             _swingReleaseTimer = 0.2f;
-            PoseBone(_upperArm, Mathf.DegToRad(-70f), _restUpperArm, delta, true);
-            PoseBone(_lowerArm, Mathf.DegToRad(-75f), _restLowerArm, delta, true);
 
             // Snappy discrete tell at window onset (first 70ms) transitioning into the perfect/block state
             bool isOnset = _combat.ParryHeldFor < 0.07f;
@@ -377,30 +506,6 @@ public partial class PlayerVisual : Node3D
             looped++;
         }
         return looped;
-    }
-
-    private void Play(string clipName) => PlayClip(clipName, false);
-
-    private void PlayClip(string clipName, bool restart)
-    {
-        if (!restart && clipName == _current) return;
-
-        foreach (var full in _anim.GetAnimationList())
-        {
-            if (!full.EndsWith("/" + clipName) && full != clipName) continue;
-            if (restart)
-            {
-                _anim.Play(full, 0.04f);
-                _anim.Seek(0, true);
-                _current = clipName;
-            }
-            else
-            {
-                _anim.Play(full, CrossFade);
-                _current = clipName;
-            }
-            return;
-        }
     }
 
 

@@ -36,6 +36,12 @@ public partial class ParryTest : Node
     private bool _staggeredOnPerfect;
 
     private int _dmgUnguarded = -1, _dmgLateGuard = -1, _dmgPerfect = -1;
+    /// The clip the guard is DRAWN with. It was reported from play as "the
+    /// sword lights up but it is not a parry", and the reason was that the
+    /// parry had no clip: the body kept playing Idle_A or Running_A while a
+    /// single arm bone was nudged against it. Damage numbers cannot see that,
+    /// which is why they said the parry worked while it did not read.
+    private bool _guardClipSeen;
     private bool _staggerLate, _staggerPerfect;
 
     public override void _Process(double delta)
@@ -44,6 +50,24 @@ public partial class ParryTest : Node
         _player ??= GetTree().GetFirstNodeInGroup("player") as Node3D;
         _room ??= FindRoom(GetTree().Root);
         if (_player == null || _room == null) return;
+
+        // Sampled every frame rather than at one instant: the guard lasts 380ms
+        // and this run is not frame-locked, so a single read can fall either
+        // side of it.
+        // The FIRST guard only, and the narrowing was forced twice by mutation.
+        // The success stance plays the same clip, so sampling after a parry
+        // landed reported the guard as drawn while the guard had no clip at all
+        // -- and restricting it to IsParrying was still not enough, because the
+        // 0.28s success stance of one parry overlaps the guard of the next. Only
+        // the first guard in the run is sampled before any success pose exists.
+        if (!_guardClipSeen && _combat != null && _combat.IsParrying && _parries == 0)
+        {
+            // Asked of the visual, not of the AnimationPlayer. An AnimationTree
+            // now drives the skeleton so the player's own CurrentAnimation is
+            // empty and would report every clip as absent.
+            var vis = FindVisual(_player);
+            if (vis != null && vis.CurrentActionClip == "Parry_A") _guardClipSeen = true;
+        }
 
         if (_f == 20)
         {
@@ -93,13 +117,15 @@ public partial class ParryTest : Node
             GD.Print($"[PARRY] late guard: {_dmgLateGuard} hits taken, attacker staggered: {_staggerLate}");
             GD.Print($"[PARRY] perfect: {_dmgPerfect} hits taken, attacker staggered: {_staggerPerfect}");
             GD.Print($"[PARRY] parries {_parries}, of which perfect {_perfects}");
+            GD.Print($"[PARRY] the guard is drawn with its own clip: {_guardClipSeen}");
 
             bool ok = _dmgUnguarded > 0            // an unguarded blow hurts
                    && _dmgLateGuard == 0           // a late guard still saves you
                    && !_staggerLate                // but does not punish
                    && _dmgPerfect == 0             // a perfect guard saves you
                    && _staggerPerfect              // and punishes
-                   && _perfects > 0;
+                   && _perfects > 0
+                   && _guardClipSeen;               // and it LOOKS like one
 
             GD.Print(ok
                 ? "[PARRY] RESULT: PASS (a guard stops the blow; only a perfect one staggers the attacker)"
@@ -127,6 +153,13 @@ public partial class ParryTest : Node
     private bool _held;
     private void Press(string a) { if (!_held) { Input.ActionPress(a); _held = true; } }
     private void Release(string a) { if (_held) { Input.ActionRelease(a); _held = false; } }
+
+    private static LostCrownlike.PlayerCamera.PlayerVisual FindVisual(Node from)
+    {
+        if (from is LostCrownlike.PlayerCamera.PlayerVisual v) return v;
+        foreach (var c in from.GetChildren()) { var f = FindVisual(c); if (f != null) return f; }
+        return null;
+    }
 
     private static DungeonRoomBuilder FindRoom(Node from)
     {

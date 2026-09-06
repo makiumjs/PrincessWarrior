@@ -54,7 +54,15 @@ public partial class SentryTest : Node
         // 6 units at 11 u/s. Sampled every frame so the peak bolt count is the
         // real one, not whatever happens to exist at one chosen frame.
         if (_f > 60 && _f < 220)
+        {
             _boltsAtPeak = Mathf.Max(_boltsAtPeak, CountOfType<Projectile>(_room));
+            // What the projectile LOOKS like, which no damage number can see.
+            // It was a 0.5x0.1x0.1 BoxMesh with emission at 2.5 -- reported
+            // from play as enemies firing beams of light, and that is a fair
+            // description of a glowing orange box. The art pack ships an arrow;
+            // this asserts the bolt is carrying it.
+            if (!_arrowSeen) _arrowSeen = FindArrow(_room);
+        }
 
         if (_f == 220)
         {
@@ -93,8 +101,11 @@ public partial class SentryTest : Node
             int leftover = CountOfType<Projectile>(_room);
             GD.Print($"[SENTRY] bolts still alive after the sentry is gone: {leftover}");
 
+            GD.Print($"[SENTRY] the bolt is drawn as an arrow: {_arrowSeen}");
+
             bool ok = _sentriesInRoom > 0
                    && _boltsAtPeak > 0
+                   && _arrowSeen
                    && _hpAfterShot < _hpBefore
                    && _strayAliveMidflight
                    && leftover == 0;
@@ -104,6 +115,29 @@ public partial class SentryTest : Node
                 : "[SENTRY] RESULT: FAIL");
             GetTree().Quit();
         }
+    }
+
+    private bool _arrowSeen;
+
+    /// A Projectile carrying a child called "Arrow" with geometry under it.
+    /// Checking for the node alone would pass on an empty Node3D with the right
+    /// name, which is the vacuous-pass shape this suite has been bitten by.
+    private static bool FindArrow(Node from)
+    {
+        if (from is Projectile p)
+        {
+            var arrow = p.GetNodeOrNull<Node3D>("Arrow");
+            if (arrow != null && HasMesh(arrow)) return true;
+        }
+        foreach (var c in from.GetChildren()) if (FindArrow(c)) return true;
+        return false;
+    }
+
+    private static bool HasMesh(Node n)
+    {
+        if (n is MeshInstance3D m && m.Mesh != null) return true;
+        foreach (var c in n.GetChildren()) if (HasMesh(c)) return true;
+        return false;
     }
 
     private static int CountOfType<T>(Node from) where T : Node
