@@ -40,7 +40,7 @@ public partial class DungeonRoomBuilder : Node3D
     /// Length of a full run, in rooms. Six: the difficulty ramp in ComposeRoom
     /// saturates at index 3, so this gives three rooms of build-up and three
     /// at full difficulty, and every one of the three layouts is seen twice.
-    [Export] public int RunLength = 6;
+    [Export] public int RunLength = 10;
 
     /// TEST SEAM. When set to a ChunkKind name, the room becomes one gauntlet,
     /// that chunk at FULL difficulty, and a gauntlet with the exit on it.
@@ -54,6 +54,12 @@ public partial class DungeonRoomBuilder : Node3D
     /// Torches carry an OmniLight3D each; togglable so their cost can be
     /// measured rather than guessed at.
     [Export] public bool SpawnTorches = true;
+
+    /// Whether arenas are sealed until they are cleared. On in the game; off
+    /// in the traversal check, which asks whether the FLOOR can be walked and
+    /// would otherwise be measuring whether a deliberately clumsy bot can win
+    /// a fight. The lock has its own check.
+    [Export] public bool ArenaGatesEnabled = true;
     /// Back wall sits behind the play plane so it never blocks movement.
     [Export] public float WallZ = -2f;
 
@@ -75,6 +81,54 @@ public partial class DungeonRoomBuilder : Node3D
     /// Props sit against the back wall, not in the play plane. At Z=-0.6 a
     /// 1.8-wide barrel straddles Z=0 and simply hides the player behind it.
     private const float PropZ = -1.5f;
+
+    /// Depth of a platform's front face. BEHIND the play plane, not in front
+    /// of it, and the reason is the projection: the camera is orthographic, so
+    /// depth does not move anything on screen -- a face at z=+1.5 and one at
+    /// z=-0.5 cover exactly the same pixels. What depth does change is
+    /// occlusion and shadow, and at +1.5 the foundation was casting the
+    /// directional light's shadow forward onto the player and the enemies
+    /// standing on it. Visible on a capture as a grey band across a knight.
+    private const float FoundationZ = -0.5f;
+
+    /// "wall", not the pack's floor_foundation pieces. Measured: the foundation
+    /// prop is 2.2 wide and 2.0 tall with its origin at its BASE, so on a
+    /// 4-unit grid it left a 1.8-unit hole between every block and stood 1.5
+    /// above the floor it was supposed to be under. A wall is 4x4 with its
+    /// origin at its base -- exactly one grid cell, flush by construction.
+    /// The same conclusion the raised ledges reached, for a different reason.
+    /// Darker than the backdrop on purpose. In a side-scroller the walkable
+    /// surface has to be the brightest thing near it, or the player reads the
+    /// whole frame as one wall of brick; the floor tile above stays untinted
+    /// and now sits against something that recedes.
+    private static readonly Color GroundTint = new(0.42f, 0.30f, 0.22f, 0.45f);
+
+    /// Batch key for the foundation course. Same mesh as the backdrop wall,
+    /// different appearance -- see PlaceBatched. No '@' in it: Godot reserves
+    /// that character for auto-generated node names and strips it, so the
+    /// batch node came out unfindable by name and a check that looked for it
+    /// reported zero foundations in a room full of them.
+    private const string FoundationBatch = "wall_foundation";
+
+    /// Group holding the lights placed for holes in the floor, as opposed to
+    /// the corridor's own torches.
+    public const string GapTorchGroup = "gap_torch";
+
+    /// Where the foundation course was placed on the last build. The scene
+    /// itself cannot answer this: batched geometry lives in a MultiMesh whose
+    /// buffer is EMPTY under the headless renderer -- InstanceCount reads 15
+    /// and Buffer.Length reads 0, because the transforms live on the rendering
+    /// server and the dummy driver keeps none. So a headless check can prove
+    /// how MANY pieces reached the scene, and this proves where they were put.
+    public System.Collections.Generic.IReadOnlyList<Vector3> LastFoundations => _lastFoundations;
+    private readonly System.Collections.Generic.List<Vector3> _lastFoundations = new();
+
+    private readonly System.Collections.Generic.Dictionary<string, string> _batchMesh = new();
+
+    /// A ledge narrower than this is a chimney step. Filling underneath one
+    /// would turn the shaft the player is climbing into a solid mass and hide
+    /// the very gaps the climb is made of.
+    private const float MinWidthForFoundation = 3.5f;
 
     public override void _Ready()
     {
@@ -158,6 +212,13 @@ public partial class DungeonRoomBuilder : Node3D
     /// the caller choose: run them all now (the first room, and every test,
     /// which needs the room to exist by the time the call returns) or one per
     /// frame (the game).
+    /// The rectangles the last build was composed from, in composition order.
+    /// A test seam, like ChunkUnderTest: a check that re-derives the layout by
+    /// sorting colliders by X gets it wrong the moment two platforms overlap
+    /// horizontally at different heights, which is every chimney in the game.
+    public System.Collections.Generic.IReadOnlyList<PlatformRect> LastComposedRects { get; private set; }
+        = System.Array.Empty<PlatformRect>();
+
     private System.Collections.Generic.IEnumerable<System.Action> BuildSteps()
     {
         var metrics = new PlayerMetrics();
@@ -166,6 +227,9 @@ public partial class DungeonRoomBuilder : Node3D
         var composer = string.IsNullOrEmpty(ChunkUnderTest)
             ? ComposeRoom(metrics, RoomIndex)
             : ComposeSingleChunk(metrics, ChunkUnderTest);
+
+        LastComposedRects = composer.Rects;
+        _lastFoundations.Clear();
 
         yield return () =>
         {
@@ -186,10 +250,12 @@ public partial class DungeonRoomBuilder : Node3D
             foreach (var w in composer.Walls) PlaceClimbableWall(w);
         };
 
-        yield return () => BuildBackdrop(composer.EndX);
+        yield return () => BuildLedgeSupports(composer);
+        yield return () => BuildBackdrop(composer.EndX, composer.MinY, composer.MaxY);
         yield return () => SpawnEncounters(composer);
         yield return () => SpawnCheckpoints(composer);
         yield return () => SpawnAbilityPickups(composer);
+        yield return () => SpawnArenaGates(composer);
         yield return () => SpawnExit(composer);
         yield return FlushBatches;
     }
@@ -219,8 +285,21 @@ public partial class DungeonRoomBuilder : Node3D
         // player before they have an ability to their name.
         var c = new MicroChunkComposer(m)
         {
-            Difficulty = Mathf.Min(0.55f + index * 0.15f, 1f),
+            // Ten rooms, so the ramp is stretched to match: it reached full
+            // difficulty at room 3 of 6, which over 10 rooms would mean seven
+            // identical ones. Now it saturates at room 7.
+            Difficulty = Mathf.Min(0.5f + index * 0.07f, 1f),
         };
+        // Three movements per room rather than one. A room was eight chunks and
+        // 64-72 metres, crossed in 10 to 24 seconds; six of them made a run of
+        // two to three minutes, which is a demo rather than a game. Each layout
+        // now runs about 190 metres: the first movement introduces its
+        // obstacles, the second recombines them tighter, the third is the run
+        // home.
+        //
+        // Descents are interleaved deliberately. Built only of ascents, the
+        // tripled rooms climbed past 30 metres and turned into staircases --
+        // and a staircase is one idea repeated, not a place.
         switch (index % 3)
         {
             case 0:
@@ -232,6 +311,23 @@ public partial class DungeonRoomBuilder : Node3D
                         .Add(ChunkKind.StepUp)
                         .Add(ChunkKind.DashGap)
                         .Add(ChunkKind.Chimney)
+                        .Add(ChunkKind.Gauntlet)
+
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Gap, 0.85f)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.StepUp, 0.9f)
+                        .Add(ChunkKind.Gauntlet, 0.7f)
+                        .Add(ChunkKind.DashGap, 0.9f)
+                        .Add(ChunkKind.Chimney, 0.85f)
+                        .Add(ChunkKind.Gauntlet)
+
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Gap)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.StepUp)
+                        .Add(ChunkKind.DashGap)
+                        .Add(ChunkKind.Gap, 0.8f)
                         .Add(ChunkKind.Gauntlet);
             case 1:
                 return c.Add(ChunkKind.Gauntlet)
@@ -241,6 +337,22 @@ public partial class DungeonRoomBuilder : Node3D
                         .Add(ChunkKind.Gauntlet)
                         .Add(ChunkKind.Chimney, 0.8f)
                         .Add(ChunkKind.DashGap, 0.8f)
+                        .Add(ChunkKind.Gauntlet)
+
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Gap, 0.8f)
+                        .Add(ChunkKind.Gauntlet, 0.7f)
+                        .Add(ChunkKind.Chimney)
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Gap, 0.9f)
+                        .Add(ChunkKind.Gauntlet)
+
+                        .Add(ChunkKind.WallShaft, 0.8f)
+                        .Add(ChunkKind.DashGap)
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Chimney, 0.85f)
+                        .Add(ChunkKind.Spikes)
                         .Add(ChunkKind.Gauntlet);
             default:
                 return c.Add(ChunkKind.Gauntlet)
@@ -250,8 +362,40 @@ public partial class DungeonRoomBuilder : Node3D
                         .Add(ChunkKind.Gauntlet, 0.7f)
                         .Add(ChunkKind.Gap)
                         .Add(ChunkKind.StepUp)
+                        .Add(ChunkKind.Gauntlet)
+
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Gap, 0.85f)
+                        .Add(ChunkKind.Arena)
+                        .Add(ChunkKind.Chimney, 0.9f)
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.DashGap, 0.85f)
+                        .Add(ChunkKind.Gauntlet)
+
+                        .Add(ChunkKind.StepUp)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Gap, 0.8f)
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Chimney)
                         .Add(ChunkKind.Gauntlet);
         }
+    }
+
+    /// A barrier at the far edge of every arena, lifted when that arena is
+    /// clear. Placed AFTER the encounters, because the gate counts the enemies
+    /// standing in its span and there would be none yet.
+    private void SpawnArenaGates(MicroChunkComposer composer)
+    {
+        if (!ArenaGatesEnabled) return;
+        foreach (var (x0, x1, y) in composer.Arenas)
+            AddChild(new ArenaGate
+            {
+                Name = "ArenaGate",
+                Position = new Vector3(x1 - 0.4f, y, 0f),
+                SpanMinX = x0 - 1f,
+                SpanMaxX = x1 + 1f,
+            });
     }
 
     /// Exit at the far end of the room. Placed on the ground the last chunk
@@ -394,12 +538,16 @@ public partial class DungeonRoomBuilder : Node3D
             AddChild(enemy);
             enemy.GlobalPosition = point;
 
-            var a = new Marker3D { Position = point + new Vector3(-3f, 0f, 0f) };
-            var b = new Marker3D { Position = point + new Vector3(3f, 0f, 0f) };
-            AddChild(a);
-            AddChild(b);
-            enemy.Set("PatrolPointAPath", enemy.GetPathTo(a));
-            enemy.Set("PatrolPointBPath", enemy.GetPathTo(b));
+            // Told directly, not through two marker nodes and a NodePath. The
+            // markers were created and wired AFTER AddChild, so the enemy's
+            // _Ready had already run and taken the fallback -- and taken it at
+            // the world origin, because the position had not been written
+            // either. Two marker nodes per enemy for a value that never
+            // arrived; this is one call, and it happens after the position is
+            // real.
+            if (enemy is AI.EnemyController controller)
+                controller.SetPatrolPoints(point + new Vector3(-3f, 0f, 0f),
+                                           point + new Vector3(3f, 0f, 0f));
         }
     }
 
@@ -432,12 +580,9 @@ public partial class DungeonRoomBuilder : Node3D
         AddChild(boss);
         boss.GlobalPosition = new Vector3(arena.X + arena.Width * 0.65f, arena.Y + 1.2f, 0f);
 
-        var a = new Marker3D { Position = boss.GlobalPosition + new Vector3(-arena.Width * 0.3f, 0f, 0f) };
-        var b = new Marker3D { Position = boss.GlobalPosition + new Vector3(arena.Width * 0.25f, 0f, 0f) };
-        AddChild(a);
-        AddChild(b);
-        boss.Set("PatrolPointAPath", boss.GetPathTo(a));
-        boss.Set("PatrolPointBPath", boss.GetPathTo(b));
+        if (boss is AI.EnemyController warden)
+            warden.SetPatrolPoints(boss.GlobalPosition + new Vector3(-arena.Width * 0.3f, 0f, 0f),
+                                   boss.GlobalPosition + new Vector3(arena.Width * 0.25f, 0f, 0f));
 
         GD.Print($"[Room] boss placed at x={boss.GlobalPosition.X:0.0} on a {arena.Width:0.0}-wide arena");
     }
@@ -451,12 +596,10 @@ public partial class DungeonRoomBuilder : Node3D
         {
             var at = new Vector3(r.X + i * Grid + Grid * 0.5f, r.Y, 0f);
 
-            // Ground level gets a plain floor tile. An ELEVATED ledge is seen
-            // edge-on from the play camera, never from above, so it needs sides:
-            // a flat tile read as a bare grey plank floating in the dark, and
-            // stacking a second tile underneath only turned that into two planks
-            // with a visible gap between them. floor_foundation_allsides is the
-            // pack's own answer -- a block with faces on every side.
+            // An ELEVATED ledge is seen edge-on from the play camera, never
+            // from above, so it needs sides: a flat tile read as a bare grey
+            // plank floating in the dark, and stacking a second tile underneath
+            // only turned that into two planks with a gap between them.
             if (r.Y > 0.01f)
             {
                 var blockAt = at + new Vector3(0f, -LedgeThickness * 0.5f, 0f);
@@ -472,6 +615,18 @@ public partial class DungeonRoomBuilder : Node3D
                     new Transform3D(Basis.Identity.Scaled(new Vector3(1f, Mathf.Max(LedgeThickness, 0.35f), 1f)), blockAt),
                     LedgeTint);
             }
+            // A face under the lip. Without it every hole in the floor showed
+            // the edge of a 15cm plank and then nothing, which reads as the
+            // level ending rather than as a gap to jump. Skipped on narrow
+            // ledges: see MinWidthForFoundation.
+            if (r.Width >= MinWidthForFoundation)
+            {
+                var foundationAt = new Vector3(at.X, r.Y - WallHeight, FoundationZ);
+                _lastFoundations.Add(foundationAt);
+                PlaceBatched("wall", new Transform3D(Basis.Identity, foundationAt),
+                    GroundTint, FoundationBatch);
+            }
+
             PlaceBatched("floor_tile_large", new Transform3D(Basis.Identity, at));
         }
 
@@ -517,8 +672,16 @@ public partial class DungeonRoomBuilder : Node3D
     /// the bottom third of a side-scroller frame is bare background: the camera
     /// sits near the player's height, so everything under the floor line is
     /// visible and empty.
-    private void BuildBackdrop(float endX)
+    private void BuildBackdrop(float endX, float minY, float maxY)
     {
+        // Courses enough to cover what the room actually spans. Three fixed
+        // courses were right while a room rose 4 to 11 metres; once the rooms
+        // were made three times longer the tallest climbed past 30, and
+        // everything above y=8 was bare viewport -- the same "climbed out of
+        // the built world" failure the third course was added to fix, at a
+        // new height.
+        int below = 1;
+        int above = Mathf.Max(2, Mathf.CeilToInt((maxY - minY) / WallHeight) + 1);
         int count = Mathf.CeilToInt(endX / Grid) + 1;
         for (int i = 0; i < count; i++)
         {
@@ -535,38 +698,91 @@ public partial class DungeonRoomBuilder : Node3D
             // ~60 the moment you leave the floor. Batched, because these are
             // dozens of identical pieces per room and instantiating each as its
             // own scene tree is what made rebuilds expensive.
-            PlaceBatched(piece, new Transform3D(Basis.Identity, new Vector3(i * Grid, 0f, WallZ)));
-            PlaceBatched("wall", new Transform3D(Basis.Identity, new Vector3(i * Grid, -WallHeight, WallZ)));
-            PlaceBatched("wall", new Transform3D(Basis.Identity, new Vector3(i * Grid, WallHeight, WallZ)));
+            PlaceBatched(piece, new Transform3D(Basis.Identity, new Vector3(i * Grid, minY, WallZ)));
+            for (int c = 1; c <= below; c++)
+                PlaceBatched("wall", new Transform3D(Basis.Identity,
+                    new Vector3(i * Grid, minY - c * WallHeight, WallZ)));
+            for (int c = 1; c <= above; c++)
+                PlaceBatched("wall", new Transform3D(Basis.Identity,
+                    new Vector3(i * Grid, minY + c * WallHeight, WallZ)));
 
             // A mounted torch every other wall section, each with a real
             // OmniLight3D. The round-3 critic scored lighting as flat: two
             // directional lights and nothing else, in a dungeon kit that ships
             // torches. Local warm pools are what give a stone corridor depth.
             if (SpawnTorches && i % 2 == 1)
-                MountTorch(new Vector3(i * Grid, 2.4f, WallZ + 0.55f), 3.4f);
+                MountTorch(new Vector3(i * Grid, minY + 2.4f, WallZ + 0.55f), 3.4f);
 
             // A sparser upper row. Climbing should not mean climbing into the
             // dark: a platformer where you cannot see the ledge you are aiming
             // at is unfair in a way that reads as the game being broken rather
             // than hard. Sparser than the floor row so the corridor still has
             // pools of light rather than an even wash.
+            // One per course above the floor line, not just the first: a room
+            // that climbs 30 metres needs light all the way up, and the old
+            // single upper row lit only the first 4.
             if (SpawnTorches && i % 4 == 2)
-                MountTorch(new Vector3(i * Grid, 2.4f + WallHeight, WallZ + 0.55f), 2.6f);
+                for (int c = 1; c <= above; c++)
+                    MountTorch(new Vector3(i * Grid, minY + 2.4f + c * WallHeight, WallZ + 0.55f), 2.6f);
         }
     }
 
-    private void MountTorch(Vector3 at, float energy)
+    /// A light inside every hole.
+    ///
+    /// A gap was three things at once from the player's seat: no floor, no
+    /// structure under the floor, and no light in the space between. The
+    /// foundation course answers the second; this answers the third. The wall
+    /// course below the floor line exists, but the nearest torch is at y=2.4
+    /// and nothing reaches down, so a gap was a black band -- and a black band
+    /// is indistinguishable from the end of the level.
+    private void BuildLedgeSupports(MicroChunkComposer composer)
+    {
+        var rects = composer.Rects;
+        for (int i = 0; i < rects.Count - 1; i++)
+        {
+            var here = rects[i];
+            var next = rects[i + 1];
+
+            float lip = here.X + here.Width;
+            float gap = next.X - lip;
+
+            // Anything under about a metre is a seam between two platforms of
+            // the same run, not a hole the player has to read.
+            if (gap < 1.0f) continue;
+
+            if (!SpawnTorches) continue;
+
+            // Low, and inside the span. High enough not to be under the floor
+            // line of the lower lip, low enough that its pool falls into the
+            // hole rather than onto the ceiling.
+            float mid = lip + gap * 0.5f;
+            float y = Mathf.Min(here.Y, next.Y) + 1.1f;
+            MountTorch(new Vector3(mid, y, WallZ + 0.55f), 2.8f, GapTorchGroup);
+        }
+    }
+
+    /// <param name="group">Puts the light in a group. Only the gap torches pass
+    /// one, and only because of what it lets a check say: the corridor's
+    /// torches sit every 8 metres, so "a light exists somewhere across this
+    /// hole" is true whether or not anything was placed FOR the hole.
+    ///
+    /// A GROUP rather than a name. Named nodes looked like the obvious answer
+    /// and quietly did not work: AddChild without forceReadableName renames a
+    /// colliding child to "@GapTorch@2", so a StartsWith lookup found the first
+    /// torch in a room and missed every other one -- three placed, one seen.</param>
+    private void MountTorch(Vector3 at, float energy, string group = null)
     {
         Place("torch_mounted", at, 0f);
-        AddChild(new TorchFlicker
+        var light = new TorchFlicker
         {
             Position = at + new Vector3(0f, 0.35f, 0.6f),
             LightColor = new Color(1f, 0.72f, 0.42f),
             BaseEnergy = energy,
             OmniRange = 8.5f,
             ShadowEnabled = false,
-        });
+        };
+        AddChild(light);
+        if (group != null) light.AddToGroup(group);
     }
 
     /// Clears the room and regenerates it with a new layout, then places the
@@ -729,15 +945,23 @@ public partial class DungeonRoomBuilder : Node3D
 
     private readonly System.Collections.Generic.Dictionary<string, Color> _batchTints = new();
 
-    private void PlaceBatched(string name, Transform3D xform, Color? tint = null)
+    /// <param name="batchKey">Which batch these instances join. Defaults to the
+    /// mesh name, which is what every caller wanted until the foundations
+    /// arrived: they are made of the same "wall" piece as the backdrop, and
+    /// because tints are stored PER BATCH, tinting them was silently tinting
+    /// the entire back wall of the room as well. A separate key gives the same
+    /// mesh two independent appearances.</param>
+    private void PlaceBatched(string name, Transform3D xform, Color? tint = null, string batchKey = null)
     {
-        if (!_batches.TryGetValue(name, out var list))
+        string key = batchKey ?? name;
+        if (!_batches.TryGetValue(key, out var list))
         {
             list = new System.Collections.Generic.List<Transform3D>();
-            _batches[name] = list;
+            _batches[key] = list;
+            _batchMesh[key] = name;
         }
         list.Add(xform);
-        if (tint.HasValue) _batchTints[name] = tint.Value;
+        if (tint.HasValue) _batchTints[key] = tint.Value;
     }
 
     /// Turns everything collected by PlaceBatched into MultiMeshInstance3Ds.
@@ -746,8 +970,9 @@ public partial class DungeonRoomBuilder : Node3D
     /// transform is folded into every instance.
     private void FlushBatches()
     {
-        foreach (var (name, transforms) in _batches)
+        foreach (var (key, transforms) in _batches)
         {
+            string name = _batchMesh.TryGetValue(key, out var m) ? m : key;
             var scene = GD.Load<PackedScene>($"{Dir}{name}.gltf");
             if (scene == null) { GD.PrintErr($"DungeonRoomBuilder: missing piece '{name}'"); continue; }
 
@@ -777,10 +1002,10 @@ public partial class DungeonRoomBuilder : Node3D
                 // per surface.
                 var node = new MultiMeshInstance3D
                 {
-                    Name = $"Batch_{name}_{_batchSeq++}",
+                    Name = $"Batch_{key}_{_batchSeq++}",
                     Multimesh = mm,
                 };
-                if (_batchTints.TryGetValue(name, out var tint))
+                if (_batchTints.TryGetValue(key, out var tint))
                     node.MaterialOverlay = new StandardMaterial3D
                     {
                         AlbedoColor = tint,
@@ -791,6 +1016,7 @@ public partial class DungeonRoomBuilder : Node3D
         }
         _batches.Clear();
         _batchTints.Clear();
+        _batchMesh.Clear();
         _batchSeq = 0;
     }
 

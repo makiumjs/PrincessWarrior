@@ -182,10 +182,17 @@ public partial class TraversalBotTest : Node
                      $"onFloor={_player.IsOnFloor()} hp={(int)_player.Get("CurrentHealth")} " +
                      $"nearestEnemy={NearestEnemyDistance(_player.GlobalPosition):F1}");
 
-        // Per-room budget. Generous: the bot is clumsy on purpose, and the
-        // question is whether a room CAN be crossed, not how quickly.
+        // Per-room budget, proportional to the room. A flat 1600 frames was
+        // right while a room was 64 metres; the rooms are now about 200, and a
+        // flat budget cut five of six rooms off between 92% and 99% -- which
+        // reads as "the level is impassable" and means "the stopwatch was
+        // short". Room 0 crossed 202 metres in 1452 frames, so 7.2 frames per
+        // metre is the measured rate; 22 is three times that, because the bot
+        // is clumsy on purpose and the question is whether a room CAN be
+        // crossed, not how quickly.
+        int budget = 900 + Mathf.RoundToInt(Mathf.Abs(_exitX - _startX) * 22f);
         int elapsed = _f - _roomStartFrame;
-        if (_reachedExit || elapsed > 1600)
+        if (_reachedExit || elapsed > budget)
         {
             float progress = (_furthestX - _startX) / Mathf.Max(0.01f, _exitX - _startX);
             string tag = ChunksToTest.Length > 0 ? ChunksToTest[_roomUnderTest] : $"room {_roomUnderTest}";

@@ -135,7 +135,14 @@ Fifty checks, in order:
     different mark, the camera is punched, and none of it accumulates
 53. the options screen opens from the title, a key already taken by another
     action is refused, and a rebind is still there after a restart
-54. no check from 3 onward printed an engine error while reaching its own PASS
+54. an enemy turns to face the player mid-attack, and a stationary one turns
+    at all
+55. every wide platform has a stone face under it and every hole in the floor
+    has a light in it
+56. an arena cannot be run past: the barrier holds until the arena is cleared
+57. enemies patrol the ground they were placed on, and the room still has its
+    population ten seconds later
+58. no check from 3 onward printed an engine error while reaching its own PASS
 
 **One unresolved intermittent.** The engine-quiet check fired on two consecutive gate runs
 immediately after a rebuild, naming engine errors, and has passed on the

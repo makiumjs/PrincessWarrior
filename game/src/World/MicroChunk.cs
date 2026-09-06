@@ -15,6 +15,11 @@ public enum ChunkKind
     Chimney,
     /// A single step up onto a ledge.
     StepUp,
+    /// A single step DOWN. Free to cross -- you fall off it -- and that is the
+    /// point: a room made only of ascents climbs out of its own backdrop and
+    /// reads as a staircase rather than a place. Added when the rooms were
+    /// lengthened and the tallest one rose past 30 metres.
+    Drop,
     /// Flat ground with a spike trap set into it: a hazard that must be jumped
     /// rather than a gap that must be crossed.
     Spikes,
@@ -56,12 +61,22 @@ public sealed class MicroChunkComposer
     private readonly List<PlatformRect> _rects = new();
     private float _cursorX;
     private float _cursorY;
+    private readonly float _startY;
+
+    /// Vertical extent of everything emitted so far, so the backdrop can be
+    /// built to cover the room instead of to a fixed height. A room that
+    /// climbs past its own back wall shows bare viewport above the player.
+    public float MinY { get; private set; }
+    public float MaxY { get; private set; }
 
     public MicroChunkComposer(PlayerMetrics metrics, float startX = 0f, float startY = 0f)
     {
         _m = metrics;
         _cursorX = startX;
         _cursorY = startY;
+        _startY = startY;
+        MinY = startY;
+        MaxY = startY;
     }
 
     public IReadOnlyList<PlatformRect> Rects => _rects;
@@ -80,6 +95,12 @@ public sealed class MicroChunkComposer
 
     public IReadOnlyList<Vector3> EncounterPoints => _encounters;
     private readonly List<Vector3> _encounters = new();
+
+    /// The horizontal span of each Arena, and the height its floor sits at.
+    /// The builder puts a barrier at the right-hand edge of each one: an arena
+    /// you can sprint past is a decoration, not an encounter.
+    public IReadOnlyList<(float X0, float X1, float Y)> Arenas => _arenas;
+    private readonly List<(float, float, float)> _arenas = new();
 
     /// Where an ability pickup must sit, and which ability it grants: just
     /// before the chunk that cannot be crossed without it. The obstacle then
@@ -137,6 +158,17 @@ public sealed class MicroChunkComposer
                 Emit(4f);
                 break;
             }
+            case ChunkKind.Drop:
+            {
+                Emit(4f);
+                // Never below the height the room started at. Under it the
+                // floor would sit beneath the backdrop's lowest course, and a
+                // deep enough one would put the player under FallDeathY on a
+                // step they were meant to walk down.
+                _cursorY = Mathf.Max(_startY, _cursorY - _m.SafeStepUp * 1.6f * intensity);
+                Emit(4f);
+                break;
+            }
             case ChunkKind.Spikes:
             {
                 // Continuous floor, with the trap set into the middle of it.
@@ -153,10 +185,12 @@ public sealed class MicroChunkComposer
                 Emit(4f);
                 RequireAbility("ChargeAttack");
                 float width = Mathf.Max(_m.SafeGap * 2f, 10f);
+                float x0 = _cursorX;
                 float centre = _cursorX + width * 0.5f;
                 Emit(width);
                 _encounters.Add(new Vector3(centre, _cursorY + 0.5f, 0f));
                 _encounters.Add(new Vector3(centre + 3f, _cursorY + 0.5f, 0f));
+                _arenas.Add((x0, _cursorX, _cursorY));
                 break;
             }
             case ChunkKind.WallShaft:
@@ -175,6 +209,7 @@ public sealed class MicroChunkComposer
 
                 _cursorX += gap;
                 _cursorY += height;
+                Track(_cursorY);
                 Emit(4f);   // landing platform at the top of the shaft
                 break;
             }
@@ -199,6 +234,7 @@ public sealed class MicroChunkComposer
                     // traversal bot from three layouts crossed to one.
                     _cursorX += _m.ChimneyStagger;
                     _rects.Add(new PlatformRect(_cursorX, _cursorY, ledge));
+                    Track(_cursorY);
                 }
                 _cursorX += ledge;
                 break;
@@ -211,5 +247,12 @@ public sealed class MicroChunkComposer
     {
         _rects.Add(new PlatformRect(_cursorX, _cursorY, width));
         _cursorX += width;
+        Track(_cursorY);
+    }
+
+    private void Track(float y)
+    {
+        MinY = Mathf.Min(MinY, y);
+        MaxY = Mathf.Max(MaxY, y);
     }
 }

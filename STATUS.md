@@ -21,7 +21,7 @@ crystals grant Dash, Double Jump, Wall Jump and Charge Attack — each placed
 immediately before the obstacle that needs it. A door at the end leads to the
 next room, generated with a different layout and a higher difficulty.
 
-A run is **six rooms**, and the last one is a boss. Its door is sealed while
+A run is **ten rooms** of about 200 metres each, and the last one is a boss. Its door is sealed while
 the Warden lives, and the Warden cannot be out-traded: armoured, every blow is
 reduced to chip damage and none of them interrupt it, so the only way it opens
 is a perfect parry. Kill it and the run shows RUN COMPLETE instead of opening
@@ -30,7 +30,7 @@ first three rooms and is at maximum for the last three.
 
 ## What is proven, and by what
 
-`bash tools/verify.sh` — 54 checks, currently all green, and green on the last
+`bash tools/verify.sh` — 58 checks, currently all green, and green on the last
 sixteen consecutive full runs. Two runs before those failed the engine-quiet check (
 errors) immediately after a rebuild and have not reproduced since; the gate now
 saves the evidence to `tools/.engine-errors.log` when that check fires, because
@@ -710,6 +710,135 @@ The check reads the binding back **from disk** after a reload, which is the
 half that matters: a rebind can be applied to `InputMap` and never written, and
 nobody finds out until the next launch. Proven by deleting the two lines that
 save it — the reload then reports Space, and the check fails.
+
+## Three defects a playthrough found, and a fourth underneath them
+
+### Enemies pointed the wrong way
+
+Reported as "enemies strike in the opposite direction". The mechanism is
+narrower and worse than that: damage is applied on RADIAL distance and a bolt's
+direction is computed from the player's position, so **the hit always landed**.
+What pointed the wrong way was the model.
+
+Facing was driven by velocity. `TickAttack` zeroes horizontal velocity so the
+enemy commits to its swing in place, and a sentry or a warlock holding its
+range never moves at all -- so both kept whatever facing they last had. Nothing
+in the suite could see it, because every assertion in it was about damage. A
+tell that points the wrong way is worse than no tell: it is the one piece of
+information a parry is timed against.
+
+Measured with the fix removed: a melee enemy mid-windup with the player behind
+it stays at facing `1`; a stationary sentry with the player on its left stays
+at `1`.
+
+The fix keeps the existing `scale.X` flip rather than forcing a Y rotation.
+`EnemyVisual` applies a 90-degree yaw offset to the model, and a forced
+rotation would fight it.
+
+### The floor had no underside, and the holes were dark
+
+Two causes behind one complaint. A walkable surface was a 15cm plank with
+nothing beneath it, so every edge showed a thin line and then background; and
+the torches sit at y=2.4 with nothing below them, so the space a player has to
+jump across was the darkest part of the frame.
+
+**The first attempt was wrong because the piece was assumed rather than
+measured.** `floor_foundation_front_and_sides` is 2.2 wide and 2.0 tall with
+its origin at its BASE: on a 4-unit grid it left a 1.8-unit hole between every
+block and stood 1.5 metres ABOVE the floor it was meant to be under. A probe
+that prints the AABB of every kit piece settled it -- `wall` is 4x4x1 with its
+origin at its base, exactly one grid cell.
+
+Two more things the captures caught:
+
+- The foundation at z=+1.5 was **casting the directional light forward onto the
+  player and the enemies standing on it**, visible as a grey band across a
+  knight. The camera is orthographic, so depth does not move anything on
+  screen: at z=-0.5 the face covers exactly the same pixels and shades nothing.
+- Batch tints are keyed **per mesh**, and the foundation is made of the same
+  `wall` piece as the backdrop -- so tinting it was silently tinting the entire
+  back wall of every room. It has its own batch key now, and is deliberately
+  *darker* than the backdrop: in a side-scroller the walkable surface has to be
+  the brightest thing near it.
+
+Mean frame brightness went 76.1 to 88.0 across the same three captured frames.
+
+### The run was two minutes long
+
+Measured first: a room was **64 to 72 metres**, not the ~50 assumed, crossed in
+10 to 24 seconds. Six of them is a demo.
+
+Each layout now runs about **200 metres in three movements** -- introduce,
+recombine tighter, run home -- and a run is **ten rooms**. Descents were added
+as a chunk kind for a specific reason: built only of ascents, the tripled rooms
+climbed past 30 metres and turned into staircases, and a staircase is one idea
+repeated rather than a place. The backdrop now follows the room's real vertical
+extent instead of stopping at a fixed height, with a torch row per course.
+
+| Measured | Before | After |
+|---|---|---|
+| Room span | 64-72m | 191-211m |
+| Rooms per run | 6 | 10 |
+| Enemies per room | 1-4 | 4-8 |
+| Vertical rise | 4-12m | 5-17m |
+| Bot traversal | 6 of 6 | 10 of 10, 42s |
+| Frame time, played run | p95 17.4-20.7, 13-23 over 33ms | p95 18.1, 24 over 33ms |
+
+The traversal bot's per-room budget was a flat 1600 frames, which cut five of
+six rooms off between 92% and 99% -- that reads as "the level is impassable"
+and means "the stopwatch was short". It is proportional now: 22 frames per
+metre, three times the measured rate of 7.2.
+
+**Arenas are sealed until they are cleared.** The Arena chunk exists to teach
+the charge attack and was the easiest ground in the room to sprint past -- the
+widest flat run, with the enemies standing in the middle of it. Its check
+asserts the barrier LIFTS as much as that it blocks: a gate that never opens is
+worse than no gate, and a check written only around "the player is stopped"
+would call that a pass.
+
+### Underneath: enemies never knew where they were
+
+The corpse-cleanup check failed on a body at **(98.0, -93.7)** -- not one of the
+twelve it kills itself, but an enemy from the room, fallen out of the world.
+Its patrol anchors read `A=-3.0 B=3.0`. So did every other enemy's.
+
+The builder did `AddChild(enemy)`, then wrote its position, then wired two
+marker nodes. **`_Ready` runs on the first of those three**, so the enemy took
+its "3 metres either side of me" fallback while it was still at the origin, and
+never read the markers at all. Two nodes per enemy for a value that never
+arrived.
+
+It survived because it was survivable: at 64 metres, walking toward x=-3 meant
+ending up near the start. At 200 metres they set off across the level -- three
+of eight walked out of the world in a single run, and one stood on a spike trap
+until it died.
+
+Two independent fixes, either sufficient: the builder now says it directly,
+after the position is real, and the fallback is measured on the first physics
+tick rather than in `_Ready`. Proven by removing both -- enemies at x=16, 19,
+46 and 72 all aiming at -3.
+
+Spikes damaged enemies as well as the player. **Patrol now refuses a hazard;
+chase still walks onto one.** That asymmetry is the design: an enemy that
+wanders onto a trap unprompted is the level playing itself, one that follows
+you onto a trap is a tactic.
+
+And the corpse check itself was wrong. It asserted **zero bodies**, which was
+right while the only deaths in the room were the twelve it caused; it now
+asserts **no body older than its own cleanup budget**. It was failing on a
+corpse 3.23 seconds into a 4.40-second cleanup, working exactly as designed.
+
+### Two limits of headless checking, found here
+
+- **A MultiMesh's buffer is empty under the headless renderer.** `InstanceCount`
+  reads 15 and `Buffer.Length` reads 0, because the transforms live on the
+  rendering server and the dummy driver keeps none. No windowless check can
+  verify WHERE batched geometry is -- only how much of it exists. Placement is
+  checked against what the builder recorded placing; the count against the
+  scene.
+- **`AddChild` without `forceReadableName` renames a colliding child to
+  `@GapTorch@2`.** Three torches placed, one found by a name-prefix lookup. A
+  group is rename-proof and is what the check uses now.
 
 ## The project is under version control
 

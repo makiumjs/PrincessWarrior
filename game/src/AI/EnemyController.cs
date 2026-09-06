@@ -72,9 +72,18 @@ public partial class EnemyController : CharacterBody3D, IDamageable
     private float _lockedZ;
     private Vector3 _patrolTargetA;
     private Vector3 _patrolTargetB;
+
+    /// The two ends of this enemy's beat. Exposed read-only so a check can ask
+    /// the question that mattered: are they anywhere near the enemy?
+    public Vector3 PatrolTargetA => _patrolTargetA;
+    public Vector3 PatrolTargetB => _patrolTargetB;
     private bool _headingToB;
     private float _stateTimer;
     private bool _navReady;
+
+    /// Set when _Ready found no patrol markers, so the default patrol has to be
+    /// measured from wherever the spawner finally puts this enemy.
+    private bool _patrolFallbackPending;
     private float _navRetryTimer;
     private Vector3 _steerTarget;
     private float _attackCooldownRemaining;
@@ -115,10 +124,27 @@ public partial class EnemyController : CharacterBody3D, IDamageable
         PatrolPointB = ResolveNode3D(PatrolPointBPath);
         VisualRoot = ResolveNode3D(VisualRootPath);
 
-        _patrolTargetA = PatrolPointA?.GlobalPosition ?? (GlobalPosition + Vector3.Left * 3f);
-        _patrolTargetB = PatrolPointB?.GlobalPosition ?? (GlobalPosition + Vector3.Right * 3f);
-        _patrolTargetA.Z = _lockedZ;
-        _patrolTargetB.Z = _lockedZ;
+        // The fallback is deferred to the first physics tick. _Ready runs the
+        // instant a node enters the tree, and a spawner that writes the
+        // position AFTER AddChild -- which is the obvious way to write it, and
+        // what this project's own room builder did -- makes "3 metres either
+        // side of me" mean "3 metres either side of the world origin".
+        //
+        // Every enemy in every generated room therefore patrolled toward x=-3
+        // no matter where it stood. Invisible while a room was 64 metres and
+        // the enemies were near the start; at 200 metres they set off across
+        // the level and three of them walked out of the world in one run.
+        if (PatrolPointA != null && PatrolPointB != null)
+        {
+            _patrolTargetA = PatrolPointA.GlobalPosition;
+            _patrolTargetB = PatrolPointB.GlobalPosition;
+            _patrolTargetA.Z = _lockedZ;
+            _patrolTargetB.Z = _lockedZ;
+        }
+        else
+        {
+            _patrolFallbackPending = true;
+        }
 
         // NavigationServer3D only syncs navigation maps at the END of a physics
         // frame. A path queried before that first sync comes back degenerate —
@@ -143,6 +169,13 @@ public partial class EnemyController : CharacterBody3D, IDamageable
     public override void _PhysicsProcess(double delta)
     {
         var dt = (float)delta;
+
+        if (_patrolFallbackPending)
+        {
+            _patrolFallbackPending = false;
+            SetPatrolPoints(GlobalPosition + Vector3.Left * 3f,
+                            GlobalPosition + Vector3.Right * 3f);
+        }
 
         if (State != EnemyState.Dead && GlobalPosition.Y < FallDeathY)
         {
@@ -223,8 +256,31 @@ public partial class EnemyController : CharacterBody3D, IDamageable
             GlobalPosition = pos;
         }
 
-        UpdateFacing(velocity.X);
+        // Facing normally follows movement. The exception is every state in
+        // which the enemy deliberately does not move: TickAttack zeroes X
+        // velocity so the enemy commits in place, and a sentry or a warlock at
+        // its preferred range never moves at all. Both then kept whatever
+        // facing they last had -- a stationary sentry aimed its model away from
+        // the player it was shooting at, and a grunt struck backwards at
+        // someone standing behind it.
+        //
+        // Nothing failed, which is why this survived: damage is applied on
+        // RADIAL distance and the bolt's direction is computed from the
+        // player's position, so the hit always landed. Only the tell was wrong,
+        // and a tell pointing the wrong way is worse than no tell at all --
+        // it is the one thing the parry has to read.
+        float facingHint = velocity.X;
+        if (player != null && IsInstanceValid(player)
+            && (State == EnemyState.Attack || State == EnemyState.Chase))
+            facingHint = player.GlobalPosition.X - GlobalPosition.X;
+
+        UpdateFacing(facingHint);
     }
+
+    /// -1 facing left, +1 facing right, 0 with no visual to read. Public so a
+    /// check can assert where the enemy is pointing; the player controller
+    /// exposes the same thing under the same name.
+    public int FacingSign => VisualRoot == null ? 0 : (VisualRoot.Scale.X < 0f ? -1 : 1);
 
     // -- IDamageable ----------------------------------------------------
 
@@ -297,7 +353,7 @@ public partial class EnemyController : CharacterBody3D, IDamageable
         // (see World/MicroChunk.cs), so a patroller that only checks its
         // waypoint walks straight off the first platform.
         int facing = _headingToB ? 1 : -1;
-        bool blocked = !HasFloorAhead(facing) || IsWallAhead(facing);
+        bool blocked = !HasFloorAhead(facing) || IsWallAhead(facing) || IsHazardAhead(facing);
 
         if (withinThreshold || blocked)
         {
@@ -400,6 +456,11 @@ public partial class EnemyController : CharacterBody3D, IDamageable
     [Export] public float CorpseSinkSeconds = 0.9f;
 
     private float _deadFor;
+
+    /// How long this body has been dead. Exposed for the cleanup check: "a
+    /// corpse is still here" and "a corpse has been here too long" are
+    /// different findings, and only the second one is a leak.
+    public float DeadForSeconds => _deadFor;
 
     /// Unsubscribing matters here: enemies are freed constantly -- on death, on
     /// every room rebuild -- and a bus holding references to freed nodes throws
@@ -563,6 +624,7 @@ public partial class EnemyController : CharacterBody3D, IDamageable
     /// only appears when a run is long enough, which is why short checks never
     /// saw it.
     private PhysicsRayQueryParameters3D _probe;
+    private PhysicsRayQueryParameters3D _hazardProbe;
 
     private PhysicsRayQueryParameters3D Probe(Vector3 from, Vector3 to)
     {
@@ -570,6 +632,47 @@ public partial class EnemyController : CharacterBody3D, IDamageable
         _probe.From = from;
         _probe.To = to;
         return _probe;
+    }
+
+    /// Second reusable query, for hazards. Separate from the one above because
+    /// a spike trap is an Area3D and the floor probe must keep looking only at
+    /// bodies -- and reused for the same reason as the first: allocating one
+    /// per frame per enemy is what produced hundreds of leaked references and
+    /// a FATAL at shutdown.
+    private PhysicsRayQueryParameters3D HazardProbe(Vector3 from, Vector3 to)
+    {
+        _hazardProbe ??= new PhysicsRayQueryParameters3D
+        {
+            CollisionMask = PhysicsLayers.Hazard,
+            CollideWithAreas = true,
+            CollideWithBodies = false,
+        };
+        _hazardProbe.From = from;
+        _hazardProbe.To = to;
+        return _hazardProbe;
+    }
+
+    /// A spike run just ahead. Patrol refuses it; chase does not.
+    ///
+    /// Spikes damage enemies as well as the player -- 15 every 0.8s against a
+    /// 30hp grunt -- and while the rooms were 64 metres long with one enemy in
+    /// them that almost never mattered. At 200 metres with three spike runs and
+    /// four to eight enemies, rooms started clearing themselves before the
+    /// player arrived: found as a corpse at (98.0, -93.7) in a check that was
+    /// only counting bodies.
+    ///
+    /// The asymmetry is the design, not a shortcut. An enemy that wanders onto
+    /// a trap unprompted is the level playing itself; one that follows you onto
+    /// a trap because you led it there is a tactic. Chase already commits to
+    /// walking off ledges for exactly this reason.
+    protected bool IsHazardAhead(int facing)
+    {
+        var space = GetWorld3D()?.DirectSpaceState;
+        if (space == null) return false;
+
+        var from = GlobalPosition + new Vector3(facing * LedgeProbeAhead, 0.6f, 0f);
+        var to = from + new Vector3(facing * LedgeProbeAhead, -1.2f, 0f);
+        return space.IntersectRay(HazardProbe(from, to)).Count > 0;
     }
 
     /// Ray-casts down just past the enemy's leading edge. No hit means the
