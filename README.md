@@ -140,8 +140,8 @@ Sixty-one checks, in order:
     action is refused, and a rebind is still there after a restart
 54. an enemy turns to face the player mid-attack, and a stationary one turns
     at all
-55. every wide platform has a stone face under it and every hole in the floor
-    has a light in it
+55. every wide platform has a stone face under it, every hole in the floor has
+    a light in it, and the scene has the lighting environment it is read through
 56. an arena cannot be run past: the barrier holds until the arena is cleared
 57. enemies patrol the ground they were placed on, and the room still has its
     population ten seconds later

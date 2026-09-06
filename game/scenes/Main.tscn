@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://src/World/DungeonRoomBuilder.cs" id="1_room"]
 [ext_resource type="Script" path="res://src/World/ParallaxBackdrop.cs" id="8_par"]
@@ -9,11 +9,32 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/Hud.tscn" id="6_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/PauseMenu.tscn" id="7_pause"]
 
+[sub_resource type="Environment" id="Environment_dungeon"]
+background_mode = 1
+background_color = Color(0.055, 0.06, 0.08, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.42, 0.36, 0.31, 1)
+ambient_light_energy = 0.35
+tonemap_mode = 3
+tonemap_white = 2.0
+glow_enabled = true
+glow_intensity = 0.55
+glow_strength = 1.0
+glow_bloom = 0.05
+glow_blend_mode = 1
+glow_hdr_threshold = 1.05
+adjustment_enabled = true
+adjustment_contrast = 1.06
+adjustment_saturation = 1.08
+
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.4
 height = 1.6
 
 [node name="Main" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_dungeon")
 
 [node name="Backdrop" type="Node3D" parent="."]
 script = ExtResource("8_par")

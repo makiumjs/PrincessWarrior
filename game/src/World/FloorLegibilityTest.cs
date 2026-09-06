@@ -34,6 +34,9 @@ public partial class FloorLegibilityTest : Node
     private int _gapsChecked;
     private int _gapsUnlit;
     private int _placementMismatch;
+    private bool _hasEnvironment;
+    private bool _glowOn;
+    private float _ambient = -1f;
 
     public override void _Process(double delta)
     {
@@ -41,6 +44,8 @@ public partial class FloorLegibilityTest : Node
         _builder ??= FindFirst<DungeonRoomBuilder>(GetTree().Root);
         if (_builder == null || _builder.IsRebuilding) return;
         if (_f % 25 != 0) return;
+
+        if (_room == 0) AuditEnvironment();
 
         Audit(_room);
         _room++;
@@ -51,12 +56,14 @@ public partial class FloorLegibilityTest : Node
                      $"without one: {_platformsUnsupported}");
             GD.Print($"[FLOOR] holes in the floor: {_gapsChecked}, unlit: {_gapsUnlit}");
             GD.Print($"[FLOOR] rooms where placed and in-scene counts disagreed: {_placementMismatch}");
+            GD.Print($"[FLOOR] world environment present={_hasEnvironment} glow={_glowOn} ambient={_ambient:F2}");
 
             bool ok = _platformsChecked > 0
                    && _gapsChecked > 0
                    && _platformsUnsupported == 0
                    && _gapsUnlit == 0
-                   && _placementMismatch == 0;
+                   && _placementMismatch == 0
+                   && _hasEnvironment && _glowOn && _ambient > 0f;
 
             GD.Print(ok
                 ? "[FLOOR] RESULT: PASS (every wide platform stands on stone and every hole is lit)"
@@ -66,6 +73,24 @@ public partial class FloorLegibilityTest : Node
         }
 
         _builder.RebuildAs(_room);
+    }
+
+    /// The lighting the room is read THROUGH, not just the geometry in it.
+    ///
+    /// The game ran without a WorldEnvironment at all for most of its life: the
+    /// viewport cleared to a colour set in project.godot as a workaround, and
+    /// every emissive surface in the game -- the torches, the boss's seal, the
+    /// impact sparks, the arena barrier -- was emissive and did not glow,
+    /// because nothing was there to bloom it. Asserted here rather than trusted
+    /// to the scene file, since a node that exists in one scene and not the one
+    /// that ships is this project's oldest failure.
+    private void AuditEnvironment()
+    {
+        var we = FindFirst<WorldEnvironment>(GetTree().Root);
+        _hasEnvironment = we?.Environment != null;
+        if (!_hasEnvironment) return;
+        _glowOn = we.Environment.GlowEnabled;
+        _ambient = we.Environment.AmbientLightEnergy;
     }
 
     private void Audit(int index)

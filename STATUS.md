@@ -1055,6 +1055,40 @@ Not a failure -- the claim is that each chunk is clearable with what it grants,
 and it is -- but it is worth having written down rather than discovered by a
 player.
 
+## Everything emissive, and nothing glowing
+
+The game had no `WorldEnvironment` for most of its life. The evidence was in
+`project.godot`: a default clear colour set there as a workaround, with a note
+explaining that Main.tscn had no environment to set one. What that also meant,
+and nobody had connected, is that **every emissive surface in the game was
+emissive and did not glow** -- the torches, the boss's seal, the arena barrier,
+the impact sparks, the gold of a perfect parry. All of them declare emission.
+Nothing was there to bloom it.
+
+There is one now: warm ambient, ACES tonemapping, moderate glow, a touch of
+contrast and saturation. Measured on the same captured frame, same seed:
+
+| | before | after |
+|---|---|---|
+| Mean brightness | 80.2 | 89.2 |
+| Warmth (mean R-B) | 25.4 | 36.5 |
+| Near-black pixels | 8.0% | 10.8% |
+
+Brighter AND darker, which is the point: that is contrast, not exposure. The
+deeper blacks fall below the walkway, where they read as depth -- the holes
+themselves are still lit, by torches placed for them, and that is asserted
+separately.
+
+Frame cost: none measurable. p95 17.80ms against 19.23 without it, which is
+inside run-to-run noise on an RTX 3080. On a weak GPU glow is not free, and
+this machine cannot tell you what it costs there.
+
+The assertion went into the check that already asks whether the level can be
+seen, rather than becoming a check of its own. Teeth: removing the node from
+Main.tscn reports `present=False glow=False` and fails -- which is the failure
+this project keeps having, a thing that exists in one scene and not in the one
+that ships.
+
 ## What is genuinely open
 
 - **Tuning by feel, and it is now the only thing left that a check cannot
@@ -1066,10 +1100,12 @@ player.
   clumsy bot proves a room can be crossed; it cannot tell you whether crossing
   it was any good.
 
-- **Visual fidelity, at 6 of 10 against the game this is modelled on.** What
-  separates it now is art direction rather than code: no particles beyond the
-  impact bursts, no weather, kit assets rather than authored art, and a generic
-  run cycle rather than a character whose walk says something about them.
+- **Visual fidelity, at 6 of 10 against the game this is modelled on** when it
+  was last scored, before the foundation course, the gap lighting and the world
+  environment. What separates it now is art direction rather than code: no
+  particles beyond the impact bursts, no weather, kit assets rather than
+  authored art, and a generic run cycle rather than a character whose walk says
+  something about them.
 
 - **The chimney can be climbed without the ability it teaches** -- on wall
   jumps, because the sides of its ledges are climbable. Measured, not fixed:
