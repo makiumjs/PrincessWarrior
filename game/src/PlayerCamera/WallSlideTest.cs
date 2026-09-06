@@ -17,6 +17,7 @@ public partial class WallSlideTest : Node
     private DungeonRoomBuilder _room;
     private Node3D _wall;
     private bool _sawSlide;
+    private int _slidingFor;
     private float _fastestFall = 0f;
 
     public override void _Process(double delta)
@@ -29,7 +30,9 @@ public partial class WallSlideTest : Node
         if (_f == 10)
         {
             EventBus.Instance.EmitAbilityUnlocked(AbilityFlags.WallJump);
-            _room.RebuildAs(1);            // the layout carrying the WallShaft
+            // Asked, not remembered: the ability gate can move which room
+            // carries the shaft, and it did.
+            _room.RebuildAs(_room.FirstRoomWith(World.ChunkKind.WallShaft));
         }
 
         if (_f == 25)
@@ -54,11 +57,29 @@ public partial class WallSlideTest : Node
             Input.ActionPress("move_left");
             Input.ActionRelease("jump");
 
-            if (_player.CurrentState == MovementState.WallSlide)
+            bool sliding = _player.CurrentState == MovementState.WallSlide;
+            if (sliding)
             {
                 _sawSlide = true;
-                _fastestFall = Mathf.Min(_fastestFall, _player.Velocity.Y);
+                _slidingFor++;
+
+                // The SUSTAINED speed, not the instant of entry. Entering a
+                // wall slide does not erase the velocity the player arrived
+                // with, and _Process reads a value _PhysicsProcess has not
+                // clamped yet, so the first frames in the state legitimately
+                // show free fall. Traced: -20 on entry, then -3.00 flat from
+                // the fifth frame on, in a state whose cap is 3.
+                //
+                // It only surfaced when the ability gate moved the wall shaft
+                // to a later, taller room, where the player arrives faster --
+                // the measurement had been wrong all along and the drop was
+                // too short to show it.
+                if (_slidingFor > 4)
+                {
+                    _fastestFall = Mathf.Min(_fastestFall, _player.Velocity.Y);
+                }
             }
+            else _slidingFor = 0;
         }
 
         if (_f == 200)

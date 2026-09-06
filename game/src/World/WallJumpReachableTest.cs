@@ -38,7 +38,10 @@ public partial class WallJumpReachableTest : Node
         if (_room == null) return;
 
         // Room 1 is the layout carrying the shaft.
-        if (_f == 10) _room.RebuildAs(1);
+        // Asked, not remembered. This said room 1 for as long as room 1 was
+        // where the wall shaft lived; the ability gate moved it to room 4 and
+        // the check failed on a design decision rather than on a defect.
+        if (_f == 10) _room.RebuildAs(_room.FirstRoomWith(ChunkKind.WallShaft));
 
         if (_f == 30)
         {
@@ -50,7 +53,7 @@ public partial class WallJumpReachableTest : Node
                     && b.GetChild(0) is CollisionShape3D cs
                     && cs.Shape is BoxShape3D box && box.Size.Y > 3f) walls++;
             }
-            GD.Print($"[WALLJUMP] room 1 contains {pickups} WallJump pickup(s) and {walls} climbable wall(s)");
+            GD.Print($"[WALLJUMP] room {_room.RoomIndex} contains {pickups} WallJump pickup(s) and {walls} climbable wall(s)");
 
             if (pickups == 0 || walls == 0)
             {

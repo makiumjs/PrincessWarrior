@@ -36,8 +36,9 @@ public partial class ArenaLockTest : Node
         _player ??= GetTree().GetFirstNodeInGroup("player") as CharacterBody3D;
         if (_room == null || _player == null || _room.IsRebuilding) return;
 
-        // Room 2 is the first Arena layout.
-        if (_f == 10) { _room.RebuildAs(2); return; }
+        // Asked, not remembered: the ability gate holds arenas back until the
+        // charge attack is due, and this said room 2.
+        if (_f == 10) { _room.RebuildAs(_room.FirstRoomWith(ChunkKind.Arena)); return; }
 
         if (_f == 30)
         {

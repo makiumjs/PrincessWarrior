@@ -449,6 +449,25 @@ public partial class PlayerController : CharacterBody3D, IDamageable
             return;
         }
 
+        // A wall slide that has run out of wall is a fall. The block below
+        // exists to protect a state set earlier in the same frame, and it
+        // cannot tell that from a state left over from the frame before -- so
+        // a player who slid off the BOTTOM of a shaft kept the wall-slide
+        // state, and with it the pose, all the way down. The clamp that state
+        // advertises had already stopped applying: traced at -8.4 m/s
+        // accelerating to -15 while CurrentState still read WallSlide, in a
+        // state whose entire job is to cap the fall at 3.
+        //
+        // It went unseen because the shaft used to be in room 1, where it is
+        // short enough that the check's window closed before the player
+        // reached the bottom. Moving the shaft to a later room is what made
+        // the drop long enough to show.
+        if (CurrentState == MovementState.WallSlide && !IsOnWall())
+        {
+            CurrentState = MovementState.Fall;
+            return;
+        }
+
         // Airborne: don't stomp a state that was just explicitly set this
         // frame (Jump / DoubleJump / WallJump / WallSlide).
         if (CurrentState is MovementState.Jump or MovementState.DoubleJump or

@@ -76,7 +76,8 @@ Sixty-one checks, in order:
 3. the save round-trip persists to disk and restores the player
 4. all three scripted attacks connect
 5. the full loop: checkpoint → death → respawn at the checkpoint that was current
-6. abilities start locked, a pickup grants one, player and save agree
+6. abilities start locked, a pickup grants one, player and save agree; the
+   check resets the save itself rather than relying on running fourth
 7. no enemy walks off a platform into a generated gap
 8. an enemy can actually damage the player — combat is not one-sided
 9. an ability earned in a previous session is still there after a restart
@@ -91,8 +92,8 @@ Sixty-one checks, in order:
 18. the save is still loadable and matches memory after 20 rooms and 20 deaths
 19. 1500 frames of random input mashing produce no degenerate state, and reach
     8 of the 9 movement states
-20. wall slide — the ninth state, which mashing cannot reach — enters and
-    clamps the fall
+20. wall slide — the ninth state, which mashing cannot reach — enters, clamps
+    the fall for as long as it lasts, and ENDS when the wall does
 21. the combo window escalates damage when chained and resets when it lapses
 22. no two of the nine procedural sounds are perceptually identical, measured
     by length, spectral centroid and noisiness

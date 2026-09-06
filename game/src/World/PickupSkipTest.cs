@@ -21,17 +21,34 @@ public partial class PickupSkipTest : Node
 {
     private int _f;
     private DungeonRoomBuilder _room;
+    private Node3D _player;
 
     public override void _Process(double delta)
     {
         _f++;
         _room ??= FindRoom(GetTree().Root);
-        if (_room == null) return;
+        _player ??= GetTree().GetFirstNodeInGroup("player") as Node3D;
+        if (_room == null || _room.IsRebuilding) return;
+
+        // A clean slate first. SaveManager restores whatever the last check in
+        // the suite left behind, and a player who already owns everything makes
+        // "the room offered nothing" look like a defect when it is obedience.
+        if (_f == 5)
+        {
+            Save.SaveManager.Instance?.ResetSave();
+            if (_player is PlayerCamera.PlayerController p) p.ResetForNewRun();
+            return;
+        }
 
         if (_f == 20) EventBus.Instance.EmitAbilityUnlocked(AbilityFlags.Dash);
 
         // Rebuild AFTER the grant: the room that gets built must notice.
-        if (_f == 40) _room.RebuildAs(0);
+        // The first room that offers a crystal at all. Room 0 has none by
+        // design now -- it is the room that teaches jumping -- and this said 0.
+        // A room that offers Dash AND something else: the check needs both
+        // halves, and a room whose only crystal is the one being suppressed
+        // cannot show that the others are still placed.
+        if (_f == 40) _room.RebuildAs(_room.FirstRoomWith(ChunkKind.DashGap));
 
         if (_f == 80)
         {

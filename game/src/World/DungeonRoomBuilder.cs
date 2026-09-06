@@ -311,6 +311,58 @@ public partial class DungeonRoomBuilder : Node3D
         return c.Add(ChunkKind.Gauntlet).Add(kind).Add(ChunkKind.Gauntlet);
     }
 
+    /// The first room of the run whose layout really contains this chunk,
+    /// gate included. Checks used to hardcode the answer.
+    public int FirstRoomWith(ChunkKind kind)
+    {
+        var metrics = new PlayerMetrics();
+        for (int i = 0; i < RunLength; i++)
+            foreach (var built in ComposeRoom(metrics, i).Kinds)
+                if (built == kind) return i;
+        return -1;
+    }
+
+    /// The first room that offers an ability crystal at all. Room 0 has none
+    /// by design now: it is the room that teaches jumping.
+    public int FirstRoomWithAbilityPickup()
+    {
+        var metrics = new PlayerMetrics();
+        for (int i = 0; i < RunLength; i++)
+            if (ComposeRoom(metrics, i).AbilityGrants.Count > 0) return i;
+        return -1;
+    }
+
+    /// Which chunk a room is allowed to build, and what it builds instead.
+    ///
+    /// The layouts are hand-ordered and every one of them opens with the
+    /// chunks that grant abilities, so a run handed out all four in its first
+    /// three rooms -- Dash and Double Jump inside the opening forty metres,
+    /// Wall Jump in room 1, Charge Attack in room 2. Seven of the remaining
+    /// rooms then had nothing new in them at all. Fine at six rooms of seventy
+    /// metres; flat at ten of two hundred.
+    ///
+    /// Substituting rather than reordering keeps each layout's shape: a
+    /// DashGap the player cannot yet cross becomes a Gap, a Chimney becomes a
+    /// StepUp, and the room still rises and falls where it did. The obstacle
+    /// still teaches its own ability -- it just teaches it a room or two later.
+    ///
+    /// Double Jump comes FIRST, and that order is not a preference. The first
+    /// arrangement gave Dash in room 1 and Double Jump in room 3, and the
+    /// traversal bot then failed rooms 2 and 3 -- stalling at exactly the point
+    /// the difficulty ramp passes about 0.6. The metric contract sizes a gap so
+    /// one jump clears it, which is true and is not the same as clearable by a
+    /// deliberately clumsy player; the old arrangement hid that by handing out
+    /// Double Jump in the opening forty metres. It is the ability that makes
+    /// every other obstacle forgiving, so it is the one that goes early.
+    private static ChunkKind Allowed(ChunkKind kind, int index) => kind switch
+    {
+        ChunkKind.Chimney when index < 1 => ChunkKind.StepUp,
+        ChunkKind.DashGap when index < 2 => ChunkKind.Gap,
+        ChunkKind.Arena when index < 3 => ChunkKind.Gauntlet,
+        ChunkKind.WallShaft when index < 4 => ChunkKind.StepUp,
+        _ => kind,
+    };
+
     /// Room layouts. Hand-ordered rather than randomised: a metroidvania's
     /// rooms are authored, and the metric contract already guarantees every
     /// sequence here is traversable whatever the player's jump is tuned to.
@@ -340,81 +392,81 @@ public partial class DungeonRoomBuilder : Node3D
         {
             case 0:
                 // Opens with flat ground and a step, not a hole.
-                return c.Add(ChunkKind.Gauntlet)
-                        .Add(ChunkKind.StepUp, 0.6f)
-                        .Add(ChunkKind.Spikes)
-                        .Add(ChunkKind.Gap)
-                        .Add(ChunkKind.StepUp)
-                        .Add(ChunkKind.DashGap)
-                        .Add(ChunkKind.Chimney)
-                        .Add(ChunkKind.Gauntlet)
+                return c.Add(Allowed(ChunkKind.Gauntlet, index))
+                        .Add(Allowed(ChunkKind.StepUp, index), 0.6f)
+                        .Add(Allowed(ChunkKind.Spikes, index))
+                        .Add(Allowed(ChunkKind.Gap, index))
+                        .Add(Allowed(ChunkKind.StepUp, index))
+                        .Add(Allowed(ChunkKind.DashGap, index))
+                        .Add(Allowed(ChunkKind.Chimney, index))
+                        .Add(Allowed(ChunkKind.Gauntlet, index))
 
-                        .Add(ChunkKind.Drop)
-                        .Add(ChunkKind.Gap, 0.85f)
-                        .Add(ChunkKind.Spikes)
-                        .Add(ChunkKind.StepUp, 0.9f)
-                        .Add(ChunkKind.Gauntlet, 0.7f)
-                        .Add(ChunkKind.DashGap, 0.9f)
-                        .Add(ChunkKind.Chimney, 0.85f)
-                        .Add(ChunkKind.Gauntlet)
+                        .Add(Allowed(ChunkKind.Drop, index))
+                        .Add(Allowed(ChunkKind.Gap, index), 0.85f)
+                        .Add(Allowed(ChunkKind.Spikes, index))
+                        .Add(Allowed(ChunkKind.StepUp, index), 0.9f)
+                        .Add(Allowed(ChunkKind.Gauntlet, index), 0.7f)
+                        .Add(Allowed(ChunkKind.DashGap, index), 0.9f)
+                        .Add(Allowed(ChunkKind.Chimney, index), 0.85f)
+                        .Add(Allowed(ChunkKind.Gauntlet, index))
 
-                        .Add(ChunkKind.Drop)
-                        .Add(ChunkKind.Gap)
-                        .Add(ChunkKind.Spikes)
-                        .Add(ChunkKind.StepUp)
-                        .Add(ChunkKind.DashGap)
-                        .Add(ChunkKind.Gap, 0.8f)
-                        .Add(ChunkKind.Gauntlet);
+                        .Add(Allowed(ChunkKind.Drop, index))
+                        .Add(Allowed(ChunkKind.Gap, index))
+                        .Add(Allowed(ChunkKind.Spikes, index))
+                        .Add(Allowed(ChunkKind.StepUp, index))
+                        .Add(Allowed(ChunkKind.DashGap, index))
+                        .Add(Allowed(ChunkKind.Gap, index), 0.8f)
+                        .Add(Allowed(ChunkKind.Gauntlet, index));
             case 1:
-                return c.Add(ChunkKind.Gauntlet)
-                        .Add(ChunkKind.WallShaft)
-                        .Add(ChunkKind.Gap, 0.9f)
-                        .Add(ChunkKind.Gap, 0.7f)
-                        .Add(ChunkKind.Gauntlet)
-                        .Add(ChunkKind.Chimney, 0.8f)
-                        .Add(ChunkKind.DashGap, 0.8f)
-                        .Add(ChunkKind.Gauntlet)
+                return c.Add(Allowed(ChunkKind.Gauntlet, index))
+                        .Add(Allowed(ChunkKind.WallShaft, index))
+                        .Add(Allowed(ChunkKind.Gap, index), 0.9f)
+                        .Add(Allowed(ChunkKind.Gap, index), 0.7f)
+                        .Add(Allowed(ChunkKind.Gauntlet, index))
+                        .Add(Allowed(ChunkKind.Chimney, index), 0.8f)
+                        .Add(Allowed(ChunkKind.DashGap, index), 0.8f)
+                        .Add(Allowed(ChunkKind.Gauntlet, index))
 
-                        .Add(ChunkKind.Drop)
-                        .Add(ChunkKind.Spikes)
-                        .Add(ChunkKind.Gap, 0.8f)
-                        .Add(ChunkKind.Gauntlet, 0.7f)
-                        .Add(ChunkKind.Chimney)
-                        .Add(ChunkKind.Drop)
-                        .Add(ChunkKind.Gap, 0.9f)
-                        .Add(ChunkKind.Gauntlet)
+                        .Add(Allowed(ChunkKind.Drop, index))
+                        .Add(Allowed(ChunkKind.Spikes, index))
+                        .Add(Allowed(ChunkKind.Gap, index), 0.8f)
+                        .Add(Allowed(ChunkKind.Gauntlet, index), 0.7f)
+                        .Add(Allowed(ChunkKind.Chimney, index))
+                        .Add(Allowed(ChunkKind.Drop, index))
+                        .Add(Allowed(ChunkKind.Gap, index), 0.9f)
+                        .Add(Allowed(ChunkKind.Gauntlet, index))
 
-                        .Add(ChunkKind.WallShaft, 0.8f)
-                        .Add(ChunkKind.DashGap)
-                        .Add(ChunkKind.Drop)
-                        .Add(ChunkKind.Chimney, 0.85f)
-                        .Add(ChunkKind.Spikes)
-                        .Add(ChunkKind.Gauntlet);
+                        .Add(Allowed(ChunkKind.WallShaft, index), 0.8f)
+                        .Add(Allowed(ChunkKind.DashGap, index))
+                        .Add(Allowed(ChunkKind.Drop, index))
+                        .Add(Allowed(ChunkKind.Chimney, index), 0.85f)
+                        .Add(Allowed(ChunkKind.Spikes, index))
+                        .Add(Allowed(ChunkKind.Gauntlet, index));
             default:
-                return c.Add(ChunkKind.Gauntlet)
-                        .Add(ChunkKind.Arena)
-                        .Add(ChunkKind.Chimney)
-                        .Add(ChunkKind.DashGap)
-                        .Add(ChunkKind.Gauntlet, 0.7f)
-                        .Add(ChunkKind.Gap)
-                        .Add(ChunkKind.StepUp)
-                        .Add(ChunkKind.Gauntlet)
+                return c.Add(Allowed(ChunkKind.Gauntlet, index))
+                        .Add(Allowed(ChunkKind.Arena, index))
+                        .Add(Allowed(ChunkKind.Chimney, index))
+                        .Add(Allowed(ChunkKind.DashGap, index))
+                        .Add(Allowed(ChunkKind.Gauntlet, index), 0.7f)
+                        .Add(Allowed(ChunkKind.Gap, index))
+                        .Add(Allowed(ChunkKind.StepUp, index))
+                        .Add(Allowed(ChunkKind.Gauntlet, index))
 
-                        .Add(ChunkKind.Drop)
-                        .Add(ChunkKind.Spikes)
-                        .Add(ChunkKind.Gap, 0.85f)
-                        .Add(ChunkKind.Arena)
-                        .Add(ChunkKind.Chimney, 0.9f)
-                        .Add(ChunkKind.Drop)
-                        .Add(ChunkKind.DashGap, 0.85f)
-                        .Add(ChunkKind.Gauntlet)
+                        .Add(Allowed(ChunkKind.Drop, index))
+                        .Add(Allowed(ChunkKind.Spikes, index))
+                        .Add(Allowed(ChunkKind.Gap, index), 0.85f)
+                        .Add(Allowed(ChunkKind.Arena, index))
+                        .Add(Allowed(ChunkKind.Chimney, index), 0.9f)
+                        .Add(Allowed(ChunkKind.Drop, index))
+                        .Add(Allowed(ChunkKind.DashGap, index), 0.85f)
+                        .Add(Allowed(ChunkKind.Gauntlet, index))
 
-                        .Add(ChunkKind.StepUp)
-                        .Add(ChunkKind.Spikes)
-                        .Add(ChunkKind.Gap, 0.8f)
-                        .Add(ChunkKind.Drop)
-                        .Add(ChunkKind.Chimney)
-                        .Add(ChunkKind.Gauntlet);
+                        .Add(Allowed(ChunkKind.StepUp, index))
+                        .Add(Allowed(ChunkKind.Spikes, index))
+                        .Add(Allowed(ChunkKind.Gap, index), 0.8f)
+                        .Add(Allowed(ChunkKind.Drop, index))
+                        .Add(Allowed(ChunkKind.Chimney, index))
+                        .Add(Allowed(ChunkKind.Gauntlet, index));
         }
     }
 

@@ -964,6 +964,65 @@ The slicing is kept, with that said plainly. It buys nothing today. What it
 does buy is a bound: twelve platforms per step whatever the room's length,
 where before it was however many the room had.
 
+## The abilities all arrived in the first three rooms
+
+A run hands out four abilities. Every layout opens with the chunks that grant
+them, so a ten-room run gave Dash and Double Jump inside the opening forty
+metres, Wall Jump in room 1 and Charge Attack in room 2 -- and then seven rooms
+with nothing new in them. Fine at six rooms of seventy metres; flat at ten of
+two hundred.
+
+Rooms now build only the chunks they are allowed to, substituting rather than
+reordering: a DashGap the player cannot yet cross becomes a Gap, a Chimney
+becomes a StepUp. Each layout keeps its shape and still rises and falls where
+it did; the obstacle still teaches its own ability, a room or two later. Room 0
+has no crystal at all now -- it is the room that teaches jumping. The grants
+land in rooms 1, 2, 4 and 5, and the vertical rise climbs 2.6, 4.0, 5.0, 7.1,
+13.5 metres instead of starting at 5 and jumping about.
+
+**The bot rejected the first arrangement, which is what it is for.** Dash first
+and Double Jump third failed rooms 2 and 3, stalling exactly where the
+difficulty ramp passes about 0.6. The metric contract sizes every gap so one
+jump clears it -- true, and not the same claim as "clearable by a deliberately
+clumsy player". The old order hid the difference by handing out Double Jump in
+the opening forty metres. It is the ability that makes every other obstacle
+forgiving, so it goes first. Reordered: 10 of 10, in 54 seconds.
+
+### Four checks that remembered instead of asking
+
+Gating, PickupSkip, WallJumpReachable and ArenaLock each hardcoded which room
+held the thing they tested -- "room 1 has the wall shaft", "room 0 has the
+crystals", "room 2 has the arena". All true until the gate moved them, and then
+four red checks that were reporting a design decision rather than a defect.
+They ask the builder now (`FirstRoomWith(kind)`), which is the same lesson as
+the check numbering that rotted three times: do not remember what you can ask.
+
+Two of them also depended on the save left behind by whichever check ran
+before. "The player starts with abilities locked" is a claim about a fresh run,
+and it was passing because Gating happened to be the fourth check, three places
+after the one that deletes the save file. Both reset it themselves now.
+
+### And underneath them, a real one
+
+A player who slides off the BOTTOM of a wall keeps the wall-slide state. Traced
+at y=-0.97, falling at -8.4 m/s and accelerating to -15, with `CurrentState`
+still reading `WallSlide` -- a state whose entire job is to cap the fall at 3.
+The pose stays too.
+
+`ResolvePostMoveState` declines to overwrite "a state that was just explicitly
+set this frame", and cannot tell that from one left over from the frame before.
+So the state outlived the wall that justified it.
+
+It had been there all along and was invisible: the wall shaft was in room 1,
+short enough that the check's 200-frame window closed before the player reached
+the bottom. **Moving the shaft to a later, taller room is what made the drop
+long enough to show it.** Now -3.00 flat for the whole slide.
+
+Two measurement faults were separated from that real one rather than folded
+into it: the check sampled the frame the player ENTERS the state, which still
+carries the previous frame's free-fall velocity, and it took the instantaneous
+minimum rather than the sustained speed.
+
 ## The project is under version control
 
 As of this commit it is a git repository, pushed to GitHub. Until then every

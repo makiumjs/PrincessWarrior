@@ -122,8 +122,18 @@ public sealed class MicroChunkComposer
     /// in 5.5 seconds on the opening run.
     public float Difficulty { get; set; } = 1f;
 
+    /// Every kind this composition actually built, in order. Recorded so a
+    /// check can ask which room contains a chunk instead of remembering the
+    /// answer: "room 1 has the wall shaft" was true until the ability gate
+    /// moved it to room 4, and two checks failed on a design decision rather
+    /// than on a defect.
+    public IReadOnlyList<ChunkKind> Kinds => _kinds;
+    private readonly List<ChunkKind> _kinds = new();
+
     public MicroChunkComposer Add(ChunkKind kind, float intensity = 1f)
     {
+        _kinds.Add(kind);
+
         intensity = Mathf.Clamp(intensity * Difficulty, 0.3f, 1f);
         switch (kind)
         {

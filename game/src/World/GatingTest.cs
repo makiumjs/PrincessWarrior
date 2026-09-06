@@ -15,6 +15,7 @@ public partial class GatingTest : Node
 {
     private int _f;
     private Node3D _player;
+    private DungeonRoomBuilder _room;
     private AbilityFlags _granted;
     private bool _sawGrant;
 
@@ -32,7 +33,19 @@ public partial class GatingTest : Node
     {
         _f++;
         _player ??= GetTree().GetFirstNodeInGroup("player") as Node3D;
-        if (_player == null) return;
+        _room ??= FindRoom(GetTree().Root);
+        if (_player == null || _room == null || _room.IsRebuilding) return;
+
+        // Its own clean slate. "Starts locked" is a claim about a fresh run,
+        // and SaveManager restores whatever the previous check in the suite
+        // left on disk -- so this depended on being the fourth check rather
+        // than on the game being right.
+        if (_f == 3)
+        {
+            Save.SaveManager.Instance?.ResetSave();
+            if (_player is PlayerCamera.PlayerController p) p.ResetForNewRun();
+            return;
+        }
 
         if (_f == 5)
         {
@@ -44,13 +57,33 @@ public partial class GatingTest : Node
                 GetTree().Quit();
                 return;
             }
-            Input.ActionPress("move_right");
+            // Room 0 has no crystal in it any more -- it is the room that
+            // teaches jumping -- and this used to walk right in whichever room
+            // happened to be built. Asked, not remembered.
+            _room.RebuildAs(_room.FirstRoomWithAbilityPickup());
+            return;
         }
 
-        if (_f is > 5 and < 1500 && _f % 28 == 0) Input.ActionPress("jump");
-        if (_f is > 5 and < 1500 && _f % 28 == 4) Input.ActionRelease("jump");
+        // Put the player just short of the first crystal and walk into it.
+        // Walking the whole room to reach one is a traversal test, and there
+        // is one of those; what this owns is what happens when the crystal is
+        // touched.
+        if (_f == 30)
+        {
+            var pickup = FirstPickup(_room);
+            if (pickup == null)
+            {
+                GD.Print("[GATE] RESULT: FAIL (no ability pickup anywhere in the first room that should have one)");
+                GetTree().Quit();
+                return;
+            }
+            _player.GlobalPosition = pickup.GlobalPosition + new Vector3(-3.5f, 0.4f, 0f);
+            GD.Print($"[GATE] walking into a {pickup.Ability} crystal at x={pickup.GlobalPosition.X:F1}");
+            Input.ActionPress("move_right");
+            return;
+        }
 
-        if (_f == 1500)
+        if (_f == 300)
         {
             var now = (AbilityFlags)(int)_player.Get("UnlockedAbilities");
             var saved = Save.SaveManager.Instance?.Current?.UnlockedAbilities ?? AbilityFlags.None;
@@ -62,7 +95,22 @@ public partial class GatingTest : Node
             GD.Print(ok
                 ? "[GATE] RESULT: PASS (locked at start, pickup grants, player and save agree)"
                 : "[GATE] RESULT: FAIL");
+            Input.ActionRelease("move_right");
             GetTree().Quit();
         }
+    }
+
+    private static AbilityPickup FirstPickup(Node from)
+    {
+        if (from is AbilityPickup p) return p;
+        foreach (var c in from.GetChildren()) { var f = FirstPickup(c); if (f != null) return f; }
+        return null;
+    }
+
+    private static DungeonRoomBuilder FindRoom(Node from)
+    {
+        if (from is DungeonRoomBuilder b) return b;
+        foreach (var c in from.GetChildren()) { var f = FindRoom(c); if (f != null) return f; }
+        return null;
     }
 }
