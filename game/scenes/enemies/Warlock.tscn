@@ -21,7 +21,7 @@ shape = SubResource("CapsuleShape3D_1")
 
 [node name="Visual" type="Node3D" parent="VisualRoot"]
 script = ExtResource("2_visual")
-CharacterScene = "res://assets/kaykit/characters/Mage.glb"
+CharacterScene = "res://assets/kaykit/characters/Skeleton_Mage.glb"
 WeaponScene = "res://assets/kaykit/props/staff.gltf"
 OffhandScene = "res://assets/kaykit/props/spellbook_closed.gltf"
 

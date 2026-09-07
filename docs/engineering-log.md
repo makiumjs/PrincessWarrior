@@ -1442,3 +1442,34 @@ The check needed one correction to keep meaning anything: it read the hazard
 node's own X, and the node is now the pivot, which does not move. It follows the
 head. A measurement that survives a change of mechanism by accident is a
 measurement that was not about the mechanism.
+
+## Six enemy types wearing four models
+
+The boss and a common enemy were the same figure. `Warden.tscn` and
+`Skirmisher.tscn` both loaded `Barbarian.glb`, distinguished only by the
+Warden's 1.35x visual scale; `Sentinel.tscn` and `BasicMelee` both came out as
+`Knight.glb`, the latter by inheriting `EnemyVisual`'s default.
+
+This project had already found and hand-fixed the same defect once. The
+engineering log records it: the first crossbow sentry was the grunt's knight
+with a dagger instead of a sword, invisible at the camera's distance, and it was
+tinted steel-blue in response. Nothing was watching for the class of defect, so
+it came back as the roster grew.
+
+The KayKit Skeletons pack shares the **same `Rig_Medium` armature** as the
+Adventurers already in the project -- verified by comparing node lists, 24 in
+common including `upperarm.r`, `lowerarm.r`, `chest` and `upperleg.l`, not
+assumed from the pack being by the same artist. So four new characters cost four
+edited strings and no animation work at all: they inherit every clip, including
+the `Slash_A` and `Parry_A` authored here in Blender.
+
+**Check 32 watches for it now**, and the shape of the assertion matters. It
+collects the model each type wears and requires the mapping to be injective --
+"six types, six distinct models" -- rather than counting models or checking a
+list. Reintroducing the collision on purpose turns it red with the offenders
+named: `Barbarian.glb worn by Skirmisher + Warden`. A check that fails without
+telling you what collided is a check you have to debug before you can use it.
+
+The two living humans are a design decision rather than a shortage: a crypt of
+skeletons with a living Warden at the end, and one living sentry among them, is
+the cheapest way to make the boss read as the boss.

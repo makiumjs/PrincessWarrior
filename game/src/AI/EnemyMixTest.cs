@@ -146,7 +146,23 @@ public partial class EnemyMixTest : Node
             GD.Print($"[MIX] enemies per room, first half {frontAvg:F1} ({frontRooms} rooms) " +
                      $"vs second half {backAvg:F1} ({backRooms} rooms)");
 
+            // Injective, not merely present: two types wearing one model is the
+            // defect, so the count of distinct MODELS has to match the count of
+            // types that reported one.
+            var models = new System.Collections.Generic.HashSet<string>(_modelOf.Values);
+            var shared = new System.Collections.Generic.List<string>();
+            foreach (var m in models)
+            {
+                var wearers = new System.Collections.Generic.List<string>();
+                foreach (var kv in _modelOf) if (kv.Value == m) wearers.Add(kv.Key);
+                if (wearers.Count > 1)
+                    shared.Add($"{m[(m.LastIndexOf('/') + 1)..]} worn by {string.Join(" + ", wearers)}");
+            }
+            GD.Print($"[MIX] {_modelOf.Count} types, {models.Count} distinct models" +
+                     (shared.Count > 0 ? $" -- SHARED: {string.Join("; ", shared)}" : ""));
+
             bool ok = _typesSeen.Count >= 4
+                   && shared.Count == 0
                    && backRooms > 0 && frontRooms > 0
                    && backAvg > frontAvg * 1.2f
                    && _roomsVisited.Count >= 3
@@ -163,6 +179,15 @@ public partial class EnemyMixTest : Node
                 : "[MIX] RESULT: FAIL");
             GetTree().Quit();
         }
+    }
+
+    private readonly System.Collections.Generic.Dictionary<string, string> _modelOf = new();
+
+    private static EnemyVisual FindVisualIn(Node from)
+    {
+        if (from is EnemyVisual v) return v;
+        foreach (var c in from.GetChildren()) { var f = FindVisualIn(c); if (f != null) return f; }
+        return null;
     }
 
     private void Survey()
@@ -182,6 +207,18 @@ public partial class EnemyMixTest : Node
             string t = e.GetType().Name;
             here[t] = here.TryGetValue(t, out int n) ? n + 1 : 1;
             _typesSeen.Add(t);
+
+            // Which MODEL each type wears. Reported from play twice in this
+            // project's history and fixed twice by hand -- "the first sentry was
+            // the same knight as the grunt, distinguished by a dagger, invisible
+            // at the camera's distance" -- and then it came back: the Warden and
+            // the Skirmisher were both a Barbarian, so the final boss shared a
+            // silhouette with a common enemy, and the Sentinel shared one with
+            // the grunt. Two types on one model is a defect no damage number can
+            // see, so it is recorded here rather than left to be noticed.
+            var visual = FindVisualIn(e);
+            string model = visual == null ? "" : visual.CharacterScene;
+            if (model.Length > 0) _modelOf[t] = model;
         }
 
         int total = 0;

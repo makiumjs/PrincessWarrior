@@ -29,7 +29,10 @@ locked door you return to, it is a chunk quietly made easier until a pickup
 appears.
 
 You run, jump, fight, take damage from spike traps, bank checkpoints, die and
-respawn at the last one. Enemies come in four kinds and each wants a different
+respawn at the last one. **The dungeon is walked by the dead**: the grunt, the
+skirmisher, the warlock and the halfway Sentinel are skeletons, and the only two
+living things in it are one crossbow sentry and the Warden at the end -- which
+is the cheapest way to make the boss read as the boss. Enemies come in four kinds and each wants a different
 answer: a grunt you walk up to, a sentry that has to be closed on through fire,
 a skirmisher that will not stand and trade, and a warlock that holds its range
 so closing costs you ground it keeps taking back. The first five rooms are built from three
