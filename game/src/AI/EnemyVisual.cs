@@ -170,18 +170,49 @@ public partial class EnemyVisual : Node3D
                 };
                 mi.MaterialOverlay = mat;
             }
+            var tel = _enemy?.CurrentTelegraph ?? Core.AttackTelegraphType.StandardWhite;
             if (flash)
             {
-                // Discrete bright flash at parry window onset: white/gold spark
-                mat.AlbedoColor = new Color(1f, 1f, 0.9f, 0.9f);
-                mat.Emission = new Color(1f, 0.95f, 0.8f);
-                mat.EmissionEnergyMultiplier = 6.0f;
+                // Discrete bright flash at parry window onset:
+                if (tel == Core.AttackTelegraphType.UnparryableRed)
+                {
+                    mat.AlbedoColor = new Color(1f, 0.1f, 0.1f, 0.95f);
+                    mat.Emission = new Color(1f, 0.05f, 0.05f);
+                    mat.EmissionEnergyMultiplier = 6.5f;
+                }
+                else if (tel == Core.AttackTelegraphType.CounterGold)
+                {
+                    mat.AlbedoColor = new Color(1f, 0.9f, 0.2f, 0.95f);
+                    mat.Emission = new Color(1f, 0.85f, 0.1f);
+                    mat.EmissionEnergyMultiplier = 6.5f;
+                }
+                else
+                {
+                    mat.AlbedoColor = new Color(0.95f, 0.98f, 1f, 0.9f);
+                    mat.Emission = new Color(0.9f, 0.95f, 1f);
+                    mat.EmissionEnergyMultiplier = 5.5f;
+                }
             }
             else
             {
-                mat.AlbedoColor = new Color(1f, 0.55f, 0.2f, amount * 0.5f);
-                mat.Emission = new Color(1f, 0.5f, 0.15f);
-                mat.EmissionEnergyMultiplier = amount * 3.5f;
+                if (tel == Core.AttackTelegraphType.UnparryableRed)
+                {
+                    mat.AlbedoColor = new Color(1f, 0.2f, 0.2f, amount * 0.65f);
+                    mat.Emission = new Color(1f, 0.1f, 0.1f);
+                    mat.EmissionEnergyMultiplier = amount * 4.2f;
+                }
+                else if (tel == Core.AttackTelegraphType.CounterGold)
+                {
+                    mat.AlbedoColor = new Color(1f, 0.75f, 0.2f, amount * 0.6f);
+                    mat.Emission = new Color(1f, 0.7f, 0.15f);
+                    mat.EmissionEnergyMultiplier = amount * 3.8f;
+                }
+                else
+                {
+                    mat.AlbedoColor = new Color(0.85f, 0.9f, 1f, amount * 0.5f);
+                    mat.Emission = new Color(0.8f, 0.88f, 1f);
+                    mat.EmissionEnergyMultiplier = amount * 3.2f;
+                }
             }
         }
     }

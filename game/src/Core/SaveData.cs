@@ -19,6 +19,11 @@ public partial class SaveData : Resource
     [Export] public AbilityFlags UnlockedAbilities = AbilityFlags.All;
     [Export] public string LastCheckpointId = "";
 
+    /// <summary>
+    /// Persistent world flags across runs (e.g. struck shortcut levers).
+    /// </summary>
+    [Export] public Godot.Collections.Dictionary<string, bool> WorldFlags { get; set; } = new();
+
     /// Run progress. RoomsCleared is the high-water mark, not the current
     /// room: dying and respawning must not lower it, or the ending would move
     /// further away every time the player died.

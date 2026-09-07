@@ -531,7 +531,9 @@ public partial class PlayerController : CharacterBody3D, IDamageable
         // the stun would read as a parry that did not work.
         _combat ??= GetNodeOrNull<Combat.CombatController>("CombatController");
         var parry = _combat?.TryConsumeParry() ?? Combat.CombatController.ParryResult.None;
-        if (parry != Combat.CombatController.ParryResult.None)
+        bool isUnparryable = info.Telegraph == AttackTelegraphType.UnparryableRed;
+
+        if (parry != Combat.CombatController.ParryResult.None && !isUnparryable)
         {
             bool perfect = parry == Combat.CombatController.ParryResult.Perfect;
 
@@ -559,6 +561,18 @@ public partial class PlayerController : CharacterBody3D, IDamageable
                 reach: perfect ? 1.15f : 0.6f,
                 life: perfect ? 0.32f : 0.20f);
             return;
+        }
+
+        // If the player tried to parry an unparryable red attack, give clear visual feedback
+        // that parry was shattered/bypassed: crimson impact spark.
+        if (parry != Combat.CombatController.ParryResult.None && isUnparryable && GetParent() != null)
+        {
+            Combat.ImpactBurst.Spawn(
+                GetParent(),
+                GlobalPosition + new Vector3(FacingSign * 0.5f, 0.2f, 0f),
+                new Color(1f, 0.15f, 0.15f),
+                reach: 0.9f,
+                life: 0.28f);
         }
 
         // Failure feedback (Item 03 of Craft Plan):

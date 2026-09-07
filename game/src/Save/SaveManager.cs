@@ -227,6 +227,21 @@ public partial class SaveManager : Node
         Persist();
     }
 
+    public bool GetWorldFlag(string flag)
+    {
+        if (Current?.WorldFlags == null || string.IsNullOrEmpty(flag))
+            return false;
+        return Current.WorldFlags.TryGetValue(flag, out bool val) && val;
+    }
+
+    public void SetWorldFlag(string flag, bool value = true)
+    {
+        if (Current == null || string.IsNullOrEmpty(flag))
+            return;
+        Current.WorldFlags[flag] = value;
+        Persist();
+    }
+
     /// Starts a fresh save. Without this a completed run left RunCompleted true
     /// on disk, so the next session began already finished.
     public void ResetSave()

@@ -65,7 +65,34 @@ DATA="$OUT/data_LostCrownlike_windows_x86_64"
 
 # And it has to start. "AudioManager: ready" comes from a C# autoload, so its
 # presence is proof the managed runtime came up, not just the engine.
-BOOT="$(cd "$OUT" && timeout 90 "./$NAME.exe" --quit-after 240 2>&1)"
+# Launched, watched, then KILLED BY PID -- not wrapped in `timeout`.
+#
+# `timeout` sends a POSIX signal, and a native Windows binary launched from Git
+# Bash does not answer one: on a run where the game did not quit itself, the
+# gate sat on this line for SEVEN MINUTES with the process at 0.00 seconds of
+# CPU, and only a manual taskkill freed it. A gate with no upper bound on its
+# own runtime is a gate people stop running.
+#
+# --quit-after is still passed, so the normal path is the game leaving on its
+# own after 240 frames; this is the backstop for when it does not.
+BOOT_LOG="$(mktemp)"
+( cd "$OUT" && "./$NAME.exe" --quit-after 240 >"$BOOT_LOG" 2>&1 ) &
+BOOT_PID=$!
+for _ in $(seq 1 60); do
+  kill -0 "$BOOT_PID" 2>/dev/null || break
+  grep -q "AudioManager: ready" "$BOOT_LOG" 2>/dev/null && break
+  sleep 1
+done
+# taskkill, not kill: the shell job is a wrapper, and the tree under it is what
+# holds the window open. //T //F is the Git Bash escaping for /T /F.
+if kill -0 "$BOOT_PID" 2>/dev/null; then
+  CHILD="$(powershell.exe -NoProfile -Command "(Get-Process -Name '$NAME' -ErrorAction SilentlyContinue).Id" 2>/dev/null | tr -d '')"
+  for pid in $CHILD; do taskkill //PID "$pid" //T //F >/dev/null 2>&1; done
+  kill "$BOOT_PID" 2>/dev/null
+fi
+wait "$BOOT_PID" 2>/dev/null
+BOOT="$(cat "$BOOT_LOG")"
+rm -f "$BOOT_LOG"
 if grep -qE "^ERROR|^SCRIPT ERROR|CrashHandlerException" <<<"$BOOT"; then
   printf '%s\n' "$BOOT" | grep -E "^ERROR|^SCRIPT ERROR|CrashHandlerException" | head -5
   fail "the exported game printed errors on startup"

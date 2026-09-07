@@ -38,6 +38,24 @@ public partial class ComboWindowTest : Node
         var enemy = FindLivingEnemy(GetTree().Root);
         if (enemy != null)
         {
+            // Disarmed, and this is the fix for a one-in-six flake rather than
+            // tidiness. The attacks below are pressed on FIXED FRAMES while a
+            // live enemy is swinging back; a hit that lands first puts the
+            // player in Hurt, CombatController refuses to start an attack from
+            // Hurt, and the run recorded zero chained hits -- "escalates=False
+            // resets=False" with an empty list, which reads as a broken combo
+            // and was a broken schedule.
+            //
+            // Measured before the fix: 1 failure in 6 runs, and 1 in 6 again
+            // with an unrelated feature branch stashed away, so the flake is
+            // this test's own and not anything it was blamed on.
+            //
+            // The claim under test is that chaining escalates damage. Whether a
+            // player can chain WHILE being hit is a different claim, and one no
+            // check makes.
+            enemy.AttackDamage = 0;
+            enemy.DetectionRadius = 0f;
+
             _player.GlobalPosition = enemy.GlobalPosition - new Vector3(1.1f, 0f, 0f);
             Input.ActionPress("move_right");
         }
@@ -62,6 +80,11 @@ public partial class ComboWindowTest : Node
 
         if (_f == 500 || (_chained.Count >= 2 && _afterLapse.Count >= 1 && _f > 405))
         {
+            // Say WHY when the data is empty. An assertion that reports
+            // "escalates=False" on a list nobody filled is describing its own
+            // premise failing, not the mechanic.
+            if (_chained.Count == 0)
+                GD.Print("[COMBO] no chained hit landed at all -- premise failed, not the mechanic");
             GD.Print($"[COMBO] chained hits: [{string.Join(", ", _chained)}]");
             GD.Print($"[COMBO] hit after the window lapsed: [{string.Join(", ", _afterLapse)}]");
 

@@ -35,4 +35,15 @@ public partial class Sentinel : Warden
         // the health bar cannot reach.
         EnrageAt = 0f;
     }
+
+    private int _sentinelAttackSeq;
+
+    protected override void SelectAttackTelegraph()
+    {
+        _sentinelAttackSeq++;
+        // The Sentinel exists to teach the parry: every 2nd strike is a glowing CounterGold smash
+        CurrentTelegraph = (_sentinelAttackSeq % 2 == 0)
+            ? LostCrownlike.Core.AttackTelegraphType.CounterGold
+            : LostCrownlike.Core.AttackTelegraphType.StandardWhite;
+    }
 }

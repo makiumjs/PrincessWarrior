@@ -1516,3 +1516,48 @@ late layout that already asks for a 30-metre climb, and the bot stalled at 92%
 of that room after 5929 frames, having climbed 29.7 of the 30.4 it needed. The
 fix was not a bigger budget: a conveyor belongs in the layout that runs, not the
 one that climbs. Moved, the room crossed in 2105.
+
+## Two flakes, one of them blamed on the wrong change
+
+A feature branch arrived with the gate red on two checks, and the interesting
+part is which of them the branch was responsible for.
+
+**Check 20, the combo window, reported `escalates=False resets=False` on an
+EMPTY list.** Not wrong damage -- no damage events at all, which is this
+project's recurring shape: an assertion describing its own premise failing and
+being read as the mechanic failing.
+
+It passed standing alone. It passed run in the gate's own sequence, checks 17
+through 20 back to back. Six runs gave one failure. Then the branch was stashed,
+the tree rebuilt, and six more runs gave **one failure again** -- so the flake
+was the check's own and had nothing to do with the change it arrived with. That
+measurement is the whole point: a red check next to a new branch is not evidence
+about the branch.
+
+The cause is in the test. It presses attack on FIXED FRAMES -- 40, 55, 70 --
+while a live enemy swings back, and a hit that lands first puts the player in
+`Hurt`, from which `CombatController` refuses to start an attack. The sparring
+partner is disarmed now (`AttackDamage = 0`, `DetectionRadius = 0`), because the
+claim under test is that chaining escalates damage; whether a player can chain
+WHILE being hit is a different claim and one no check makes. Twenty consecutive
+passes since, against a measured 1-in-6 before.
+
+**The export check hung the gate for seven minutes.** The process sat at 0.00
+seconds of CPU and only a manual `taskkill` freed it. `tools/export.sh` wrapped
+the exported binary in `timeout 90`, and `timeout` sends a POSIX signal that a
+native Windows binary launched from Git Bash does not answer. The game is
+launched in the background now, watched for at most sixty seconds, and killed by
+PID with `taskkill //T //F` if it does not leave on its own: 16.8 seconds, no
+orphan process. A gate with no upper bound on its own runtime is a gate people
+stop running.
+
+**The third red was left alone on purpose.** The engine-quiet check fired on two
+consecutive runs naming two DIFFERENT errors -- an `ObjectDisposedException` in
+`CombatTestScene`, then a leaked `AudioStreamGeneratorPlayback` in `Music` -- and
+passed on the third. Three standalone runs of the music test produced zero leaks,
+so there is no baseline to improve against and no way to show a fix worked. The
+tempting change was to cache the per-frame `GetStreamPlayback()` calls, which
+allocate a fresh wrapper every frame; it is probably an improvement and it is
+certainly unmeasured, and this log already records four confident diagnoses read
+off the code that turned out to be wrong. It stays recorded rather than
+speculatively fixed.

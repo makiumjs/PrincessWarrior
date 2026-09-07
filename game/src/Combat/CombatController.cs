@@ -460,6 +460,17 @@ public partial class CombatController : Node3D
         }
     }
 
+    /// <summary>
+    /// Explicitly activates parry guard (used by test harness and abilities).
+    /// </summary>
+    public void StartParry()
+    {
+        _parryTimer = ParryWindowMs / 1000f;
+        _parryHeldFor = 0f;
+        _parryCooldown = 0f;
+        TimeSinceLastParryPress = 0f;
+    }
+
     /// Called by the player when a blow is about to land. Consumes the guard:
     /// one press turns aside one blow, so a parry cannot cover a whole
     /// exchange.

@@ -207,6 +207,14 @@ knockback path, which is where the bug would live: the killing blow's impulse
 was already lost once in this file by an early return, and the fix reads as
 obvious only in hindsight.
 
+**Attack telegraphs (3-channel combat semiotics).**
+Every enemy attack has an `AttackTelegraphType`:
+- `StandardWhite`: Ordinary strike, parryable, zero chip damage on success.
+- `CounterGold`: Heavy / boss key attack, telegraphed with radiant golden aura.
+  A perfect parry staggers the attacker (1.6s on Warden) and strips armor.
+- `UnparryableRed`: Threatening crimson glow. Parry fails and the player takes
+  full damage; must be avoided via Dash with i-frames or jumping.
+
 ### UI — `src/UI/`
 HUD (health, unlocked-ability icons, checkpoint prompt, boss bar), title
 screen, pause menu. Pure consumer of signals — never calls into gameplay
@@ -235,6 +243,11 @@ restores it on `PlayerDied` via `RestorePlayerPosition()`. Uses only existing
 EventBus events — no new event vocabulary. Verified end to end: checkpoint at
 (12.5, 3.25, 0) → player moved to (-99,-99,0) → `PlayerDied` → player back at
 (12.5, 3.25, 0), and the same value re-read from disk.
+
+**WorldFlags (meta-persistence for shortcuts).**
+`SaveData.WorldFlags` persists unlocked world levers (e.g. `shortcut_act2`). If
+the lever was struck in any run, Room 0 activates an optional shortcut portal
+straight to Act II.
 
 ### Audio — `src/Audio/`
 `AudioManager.cs` autoload. Procedural SFX via `AudioStreamGenerator`

@@ -93,6 +93,31 @@ public partial class Warden : EnemyController
     /// damage a hit and the parry would still be optional.
     protected override bool StaggersOnHit(DamageInfo info) => false;
 
+    private int _attackSequence;
+
+    protected override void SelectAttackTelegraph()
+    {
+        _attackSequence++;
+        if (IsEnraged)
+        {
+            // Phase 2 (enraged): 1 = White standard, 2 = Gold counterable smash, 3 = Red unparryable rage sweep
+            int mod = _attackSequence % 3;
+            CurrentTelegraph = mod switch
+            {
+                1 => AttackTelegraphType.StandardWhite,
+                2 => AttackTelegraphType.CounterGold,
+                _ => AttackTelegraphType.UnparryableRed,
+            };
+        }
+        else
+        {
+            // Phase 1: alternates StandardWhite and CounterGold (the critical opening)
+            CurrentTelegraph = (_attackSequence % 2 == 0)
+                ? AttackTelegraphType.CounterGold
+                : AttackTelegraphType.StandardWhite;
+        }
+    }
+
     public override void _PhysicsProcess(double delta)
     {
         base._PhysicsProcess(delta);

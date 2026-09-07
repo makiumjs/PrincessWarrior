@@ -25,6 +25,12 @@ public partial class RoomExitTrigger : Area3D
     /// reached the far wall; it ends because the thing guarding it is dead.
     [Export] public bool SealedUntilBossDies;
 
+    /// Optional branching destination (e.g. "Catacombs" vs "Crucible").
+    [Export] public string DestinationActName { get; set; } = "";
+
+    /// Custom portal hue for branching biomes (e.g. Molten Crimson vs Ethereal Teal).
+    [Export] public Color CustomPortalColor { get; set; } = Colors.Transparent;
+
     private bool _used;
     private MeshInstance3D _seal;
     private int _recheckFrames;
@@ -120,12 +126,17 @@ public partial class RoomExitTrigger : Area3D
 
         // 5. Dimensional Portal Veil
         bool isFinalExit = NextRoomIndex >= RunLength;
-        Color portalColor = isFinalExit
-            ? new Color(1f, 0.85f, 0.3f, 0.7f)
-            : new Color(0.2f, 0.8f, 1f, 0.7f);
-        Color emissionColor = isFinalExit
-            ? new Color(1f, 0.82f, 0.25f)
-            : new Color(0.3f, 0.88f, 1f);
+        bool hasCustomColor = CustomPortalColor.A > 0.01f;
+        Color portalColor = hasCustomColor
+            ? new Color(CustomPortalColor.R, CustomPortalColor.G, CustomPortalColor.B, 0.75f)
+            : (isFinalExit
+                ? new Color(1f, 0.85f, 0.3f, 0.7f)
+                : new Color(0.2f, 0.8f, 1f, 0.7f));
+        Color emissionColor = hasCustomColor
+            ? CustomPortalColor
+            : (isFinalExit
+                ? new Color(1f, 0.82f, 0.25f)
+                : new Color(0.3f, 0.88f, 1f));
 
         _portalMaterial = new StandardMaterial3D
         {
@@ -150,7 +161,7 @@ public partial class RoomExitTrigger : Area3D
         {
             Name = "PortalBeacon",
             Position = new Vector3(0f, 0.3f, 0.2f),
-            LightColor = isFinalExit ? new Color(1f, 0.85f, 0.4f) : new Color(0.35f, 0.88f, 1f),
+            LightColor = hasCustomColor ? CustomPortalColor : (isFinalExit ? new Color(1f, 0.85f, 0.4f) : new Color(0.35f, 0.88f, 1f)),
             LightEnergy = 2.8f,
             OmniRange = 10.0f,
             ShadowEnabled = false,

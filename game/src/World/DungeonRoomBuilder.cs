@@ -219,6 +219,15 @@ public partial class DungeonRoomBuilder : Node3D
         foreach (var step in BuildSteps()) step();
     }
 
+    /// <summary>
+    /// Synchronously executes all build steps (used by tests requiring immediate instantiation).
+    /// </summary>
+    public void BuildImmediate()
+    {
+        TearDown();
+        BuildFromChunks();
+    }
+
     /// The build, as a sequence of steps.
     ///
     /// A rebuild costs about 155ms and it lands on the single frame the player
@@ -301,7 +310,8 @@ public partial class DungeonRoomBuilder : Node3D
 
             foreach (var (lever, gate) in composer.Latches)
             {
-                AddChild(new LeverSwitch { Name = $"Lever{lever.X:F0}", Position = lever });
+                var persistentFlag = (RoomIndex == 2 || RoomIndex == 1) ? "shortcut_act2" : "";
+                AddChild(new LeverSwitch { Name = $"Lever{lever.X:F0}", Position = lever, PersistentWorldFlag = persistentFlag });
                 AddChild(new LatchGate { Name = $"Latch{gate.X:F0}", Position = gate, LeverX = lever.X });
             }
             foreach (var (at, phase) in composer.Sweeps)
@@ -696,6 +706,55 @@ public partial class DungeonRoomBuilder : Node3D
             Shape = new BoxShape3D { Size = new Vector3(1.5f, 3.5f, 2f) },
         });
         AddChild(exit);
+
+        // 1. Biome Fork in Room 3 (End of Act I):
+        // Ground portal: Catacombs (platforming, cyan)
+        // Upper terrace portal: Crucible (elite combat, amber-red)
+        if (RoomIndex == 3)
+        {
+            exit.DestinationActName = "Catacombs";
+            exit.CustomPortalColor = new Color(0.2f, 0.85f, 0.8f);
+
+            float terraceY = last.Y + 4.5f;
+            float terraceX = last.X + last.Width - 10f;
+            PlacePlatform(new PlatformRect(terraceX, terraceY, 8f));
+            PlaceClimbableWall(new WallRect(terraceX - 0.4f, last.Y, terraceY - last.Y));
+
+            var forkExit = new RoomExitTrigger
+            {
+                Name = "RoomExit_Crucible",
+                NextRoomIndex = 4,
+                RunLength = RunLength,
+                DestinationActName = "Crucible",
+                CustomPortalColor = new Color(1f, 0.35f, 0.15f),
+                Position = new Vector3(terraceX + 6.0f, terraceY + 1.2f, 0f),
+            };
+            forkExit.AddChild(new CollisionShape3D
+            {
+                Shape = new BoxShape3D { Size = new Vector3(1.5f, 3.5f, 2f) },
+            });
+            AddChild(forkExit);
+        }
+
+        // 2. Persistent Shortcut Gateway in Room 0:
+        // If the player struck the persistent shortcut lever in an earlier run, activate a shortcut portal to Act II
+        if (RoomIndex == 0 && Save.SaveManager.Instance != null && Save.SaveManager.Instance.GetWorldFlag("shortcut_act2"))
+        {
+            var shortcutExit = new RoomExitTrigger
+            {
+                Name = "RoomExit_ShortcutAct2",
+                NextRoomIndex = 4,
+                RunLength = RunLength,
+                DestinationActName = "Shortcut to Act II",
+                CustomPortalColor = new Color(0.9f, 0.45f, 1.0f), // Arcane Amethyst
+                Position = new Vector3(6.5f, 1.2f, 0f),
+            };
+            shortcutExit.AddChild(new CollisionShape3D
+            {
+                Shape = new BoxShape3D { Size = new Vector3(1.5f, 3.5f, 2f) },
+            });
+            AddChild(shortcutExit);
+        }
     }
 
     /// Drops each ability pickup in front of the obstacle that needs it.

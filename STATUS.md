@@ -26,7 +26,11 @@ character with a sword and **all four abilities from the first frame**: double
 jump, dash, wall jump, charge attack. The crystals that used to hand them out
 are gone, and so are their HUD icons -- without backtracking a gate is not a
 locked door you return to, it is a chunk quietly made easier until a pickup
-appears.
+appears. Combat is governed by a **3-channel telegraph system** (Standard White parryable,
+Counter Gold granting 1.4x parry knockback, and Crimson Red unparryable shield-breaker).
+Level progression features **macro-branching at Room 3** (Sunken Catacombs vs The Crucible)
+and **persistent world shortcuts** (`SaveData.WorldFlags` activated by striking levers,
+opening permanent portals such as Room 0's amethyst gate straight to Act II).
 
 You run, jump, fight, take damage from spike traps, bank checkpoints, die and
 respawn at the last one. **The dungeon is walked by the dead**: the grunt, the
@@ -68,7 +72,7 @@ lives. Kill it and the run ends.
 ## What is proven, and by what
 
 
-`bash tools/verify.sh` — 63 checks, currently all green. It exits non-zero on
+`bash tools/verify.sh` — 64 checks, currently all green. It exits non-zero on
 failure and aborts on a build error rather than testing the previous assembly,
 and every check in it has been verified to FAIL correctly, not just to pass.
 
@@ -87,8 +91,9 @@ intermittent nobody can reproduce is not a fixed one.
 | Enemies per room | 4-8; first half averages 5.5, second half 9.2 |
 | Bot traversal, full run | 10 of 10 rooms with real button presses, 54s |
 | Every chunk kind alone at intensity 1.0 | 8 of 8 crossed, 157-558 frames |
-| Ability grants | rooms 1, 2, 4, 5; room 0 grants nothing |
+| Ability grants | all 4 baseline from frame 1; room 0 grants nothing |
 | Charge attack | tap 25 damage → held 55, the designed 2.2x |
+| Combat telegraphs | 3 channels: StandardWhite, CounterGold (1.4x knockback), UnparryableRed |
 | Boss armour | 55 damage on armour removes 2; the same 55 during the parry stagger removes 55 |
 | Wall slide | clamps at -3.00 m/s flat, and the state ends when the wall does |
 | Camera punch | 0.22 decaying over ~0.18s (was gone in under one frame) |
@@ -106,15 +111,16 @@ Filtering shot frames by index does not work; the cost bleeds into neighbours.
 ## Critic scores
 
 
-| | Round 3 | Round 4 | Round 5 | Round 6 |
-|---|---|---|---|---|
-| Movement feel | 7/10 | 8/10 | 8/10 | 8/10 |
-| Visual fidelity / Architecture | 4/10 | 6/10 | 6/10 | 9/10 |
+| | Round 3 | Round 4 | Round 5 | Round 6 | Round 7 |
+|---|---|---|---|---|---|
+| Movement feel | 7/10 | 8/10 | 8/10 | 8/10 | 9/10 |
+| Visual fidelity / Architecture | 4/10 | 6/10 | 6/10 | 9/10 | 9/10 |
+| Combat Depth / Encounter Design | - | - | - | 7/10 | 9/10 |
 
-Round 6 brought major architectural overhauls: stone archway exit portals with pulsing
-vortexes, floating crystal checkpoint shrines, column grounding for elevated walkways,
-corridor prop set-dressing, 3-act progression, and complete resolution of staircase
-horizontal overlap and floor compenetration.
+Round 7 evolved the project into an Action-Roguevania:
+- 3-Channel combat telegraphs: White (Standard), Gold (Counter-Parry with 1.4x knockback), Red (Unparryable shield-breaker).
+- Act I branching exits: Room 3 features a macro-fork (Sunken Catacombs vs The Crucible).
+- Persistent shortcuts: `SaveData.WorldFlags` persist lever states across runs, opening permanent shortcuts (Room 0 amethyst portal to Act II).
 
 ## Measured, but not settled
 

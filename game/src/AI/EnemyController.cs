@@ -50,6 +50,7 @@ public partial class EnemyController : CharacterBody3D, IDamageable
     [Export] public float Gravity = 20f;
     [Export] public float PatrolPointArriveThreshold = 0.3f;
     [Export] public float SteerDeadzone = 0.05f;
+    [Export] public AttackTelegraphType CurrentTelegraph { get; set; } = AttackTelegraphType.StandardWhite;
 
     /// <summary>Optional explicit patrol endpoints. If either is unset, the
     /// enemy falls back to +/-3 units on X from its spawn position.</summary>
@@ -476,8 +477,11 @@ public partial class EnemyController : CharacterBody3D, IDamageable
     {
         if (!perfect || State == EnemyState.Dead) return;
         if (GlobalPosition.DistanceTo(at) > ParryStaggerRadius) return;
+        // Unparryable attacks bypass parry
+        if (CurrentTelegraph == AttackTelegraphType.UnparryableRed) return;
 
-        _pendingKnockback = new Vector2(Mathf.Sign(GlobalPosition.X - at.X) * 5.5f, 3f);
+        float knockMultiplier = CurrentTelegraph == AttackTelegraphType.CounterGold ? 1.4f : 1.0f;
+        _pendingKnockback = new Vector2(Mathf.Sign(GlobalPosition.X - at.X) * 5.5f * knockMultiplier, 3f);
         _stateTimer = 0f;
         TransitionTo(EnemyState.Stagger);
     }
@@ -554,6 +558,7 @@ public partial class EnemyController : CharacterBody3D, IDamageable
                 SourcePosition = GlobalPosition,
                 Knockback = (target.GlobalPosition - GlobalPosition).Normalized() * 4f,
                 IsCritical = false,
+                Telegraph = CurrentTelegraph,
             });
         }
     }
@@ -579,9 +584,21 @@ public partial class EnemyController : CharacterBody3D, IDamageable
         if (next == EnemyState.Patrol && State != EnemyState.Patrol)
             SetNavTarget(_headingToB ? _patrolTargetB : _patrolTargetA);
 
+        if (next == EnemyState.Attack)
+            SelectAttackTelegraph();
+
         State = next;
         _stateTimer = 0f;
         _attackDamageApplied = false;
+    }
+
+    /// <summary>
+    /// Chooses the telegraph type for the upcoming attack. Virtual so bosses/subclasses
+    /// can alternate standard, critical counterable, or unparryable red strikes.
+    /// </summary>
+    protected virtual void SelectAttackTelegraph()
+    {
+        CurrentTelegraph = AttackTelegraphType.StandardWhite;
     }
 
     private Vector3 MoveToward(Vector3 velocity, float speed)

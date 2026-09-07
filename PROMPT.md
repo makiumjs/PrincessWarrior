@@ -1,18 +1,18 @@
-# Prompt di sviluppo — Lost Crown-style metroidvania (Godot / C#)
+# Prompt di sviluppo — 2.5D Action-Roguevania (Godot / C#)
 
 Build a 2.5D action-platformer in Godot 4.x using C# (.NET), in the spirit of
-Prince of Persia: The Lost Crown — side-scrolling camera, 3D character and geometry
-constrained to a movement plane (CharacterBody3D locked on the Z axis, classic
-Godot 2.5D setup), precise acrobatic movement (double jump, dash with short
-i-frames, wall jump, coyote time, input buffering), combo-based melee combat, and a
-Metroidvania map: one interconnected world (built from linked Godot scenes), ability-
-gated backtracking, checkpoint/save shrines.
+Prince of Persia: The Lost Crown and Dead Cells — side-scrolling camera, 3D
+character and geometry constrained to a movement plane (CharacterBody3D locked on
+the Z axis, classic Godot 2.5D setup), precise acrobatic movement (all 4 abilities
+unlocked natively: double jump, dash with short i-frames, wall jump, charge attack),
+combo-based melee combat with 3-channel telegraph parry (standard, critical, unparryable),
+and a Roguevania run loop: 10 procedural rooms generated via mathematical metric
+envelopes, 3-act biome progression with branching forks, checkpoint shrines, and
+persistent shortcuts unlocked via world levers.
 
-Art approach: procedurally generated at load time — ArrayMesh/SurfaceTool for
-geometry, Godot shaders for materials, code-driven skeletal animation (AnimationTree
-built/blended at runtime, not hand-authored clips), AudioStreamGenerator for audio.
-No external asset files. This will not match Lost Crown's hand-painted look —
-confirmed acceptable trade-off for a fully agent/code-driven pipeline.
+Art & Audio: CC0 KayKit rigged 3D models with runtime-blended skeletal animations,
+PBR environment materials with dynamic lighting, procedural SFX combined with
+CC0 Vorbis atmospheric act beds. Real-time deterministic 60 FPS performance.
 
 Build/iteration note: C# in Godot requires a build step (dotnet build / Godot's
 internal C# rebuild) before each run — every /loop round pays this cost. Accepted

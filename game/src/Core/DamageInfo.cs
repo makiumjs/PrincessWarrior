@@ -8,4 +8,5 @@ public struct DamageInfo
     public Vector3 SourcePosition;
     public Vector3 Knockback;
     public bool IsCritical;
+    public AttackTelegraphType Telegraph;
 }

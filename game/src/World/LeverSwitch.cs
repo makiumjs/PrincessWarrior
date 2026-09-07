@@ -32,6 +32,9 @@ public partial class LeverSwitch : StaticBody3D, IDamageable
     /// only changes colour has not moved.
     [Export] public float ThrowDegrees = 62f;
 
+    /// Optional persistence: if set, throwing this lever sets this flag in SaveManager.WorldFlags
+    [Export] public string PersistentWorldFlag { get; set; } = "";
+
     public bool IsThrown { get; private set; }
 
     private Node3D _visual;
@@ -58,12 +61,22 @@ public partial class LeverSwitch : StaticBody3D, IDamageable
         }
 
         AddToGroup(GroupName);
+
+        if (!string.IsNullOrEmpty(PersistentWorldFlag) && Save.SaveManager.Instance != null && Save.SaveManager.Instance.GetWorldFlag(PersistentWorldFlag))
+        {
+            IsThrown = true;
+            _tilt = ThrowDegrees;
+        }
     }
 
     public void TakeDamage(DamageInfo info)
     {
         if (IsThrown) return;
         IsThrown = true;
+        if (!string.IsNullOrEmpty(PersistentWorldFlag))
+        {
+            Save.SaveManager.Instance?.SetWorldFlag(PersistentWorldFlag, true);
+        }
         EmitSignal(SignalName.Thrown);
         EventBus.Instance?.EmitLeverThrown(GlobalPosition);
     }
