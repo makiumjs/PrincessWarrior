@@ -26,6 +26,17 @@ public enum ChunkKind
     /// here is a static distance measured against the player's jump, so the only
     /// axis the generator had for a later room was "bigger".
     Sweep,
+    /// A floor that moves. The moving-platform idea that does NOT require
+    /// waiting -- which is the whole reason there was none until now: a
+    /// platform you must ride is a rhythm the traversal bot cannot prove,
+    /// because it holds right and never stops, and a bot taught to wait stops
+    /// being the deliberately clumsy witness the metric contract rests on.
+    ///
+    /// A moving FLOOR composes with holding right instead of fighting it. It
+    /// drags you back over the first stretch and throws you forward over the
+    /// second, so the same button produces two different speeds and the gap at
+    /// the end is entered carrying something.
+    Current,
     /// A barrier with a lever in front of it. The one chunk that asks the
     /// player to ACT on the level rather than cross it: everything else here is
     /// walk-into-it, and nothing in ten rooms has ever asked for a decision
@@ -123,6 +134,14 @@ public sealed class MicroChunkComposer
     /// which is the metroidvania this game deliberately is not.
     public IReadOnlyList<(Vector3 Lever, Vector3 Gate)> Latches => _latches;
     private readonly List<(Vector3, Vector3)> _latches = new();
+
+    /// Stretches of floor that carry whatever stands on them, as
+    /// (from, to, metres per second). Recorded as SPANS rather than as a flag
+    /// on a rect because a conveyor is a length of corridor, and the builder
+    /// slices corridors into four-metre tiles on a grid the composer does not
+    /// know about.
+    public IReadOnlyList<(float X0, float X1, float Velocity)> Conveyors => _conveyors;
+    private readonly List<(float, float, float)> _conveyors = new();
 
     public IReadOnlyList<WallRect> Walls => _walls;
     private readonly List<WallRect> _walls = new();
@@ -238,6 +257,32 @@ public sealed class MicroChunkComposer
                     // band the side-on camera actually frames.
                     _sweeps.Add((new Vector3(at, _cursorY + 3.0f, 0f), i / (float)blades));
                 }
+                break;
+            }
+            case ChunkKind.Current:
+            {
+                // Against you, then with you, then a gap. The speeds are
+                // fractions of the player's own run rather than metres picked
+                // by eye: at 8 m/s a 3 m/s drag still lets you advance -- it
+                // has to, or a bot holding right would stall and the chunk
+                // would be unprovable -- and a 4 m/s push is half again as
+                // fast as walking.
+                float back = -_m.MoveSpeed * 0.375f;
+                float fwd = _m.MoveSpeed * 0.5f;
+
+                Emit(4f);
+                float againstFrom = _cursorX;
+                Emit(12f);
+                _conveyors.Add((againstFrom, _cursorX, back));
+
+                float withFrom = _cursorX;
+                Emit(8f);
+                _conveyors.Add((withFrom, _cursorX, fwd));
+
+                // Between a running jump and a dash jump: reachable off the
+                // push, and still reachable with a dash if you arrive slow.
+                _cursorX += Mathf.Lerp(_m.SafeGap, _m.SafeDashGap, 0.45f) * intensity;
+                Emit(4f);
                 break;
             }
             case ChunkKind.Latch:

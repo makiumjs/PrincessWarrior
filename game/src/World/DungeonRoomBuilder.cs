@@ -244,6 +244,7 @@ public partial class DungeonRoomBuilder : Node3D
             : ComposeSingleChunk(metrics, ChunkUnderTest);
 
         LastComposedRects = composer.Rects;
+        _conveyors = composer.Conveyors;
         _lastFoundations.Clear();
 
         // Sliced, not one step. A room was fifteen platforms when this became
@@ -273,6 +274,31 @@ public partial class DungeonRoomBuilder : Node3D
         yield return () =>
         {
             foreach (var h in composer.Hazards) AddChild(new SpikeHazard { Position = h });
+            // Arrows on the moving stretches. Without them a conveyor is a
+            // corridor the player is mysteriously bad at walking down: the
+            // floor tile is the same tile, and a mechanic the player can feel
+            // but not see reads as the controls being broken.
+            foreach (var (x0, x1, v) in composer.Conveyors)
+            {
+                int marks = Mathf.Max(2, Mathf.RoundToInt((x1 - x0) / 4f));
+                for (int i = 0; i < marks; i++)
+                {
+                    float at = Mathf.Lerp(x0 + 1.5f, x1 - 1.5f, marks == 1 ? 0.5f : i / (float)(marks - 1));
+                    // A floor PANEL, squashed to four centimetres, not the
+                    // pack's signage: the sign is an arrow on a post, and a
+                    // corridor lined with them stood a row of yellow road signs
+                    // between the camera and the player. Squashing a kit piece
+                    // is normally the thing this file warns against -- it reads
+                    // as a smeared box -- but a 1m block flattened to a marking
+                    // is a marking, and the arrow relief survives it.
+                    var basis = Basis.Identity.Rotated(Vector3.Up, v < 0f ? Mathf.Pi : 0f)
+                                              .Scaled(new Vector3(1f, 0.04f, 1f));
+                    PlaceBatched("../platformer/platform_arrow_2x2x1_red",
+                        new Transform3D(basis, new Vector3(at - 1f, ConveyorFloorY(x0) + 0.01f, -1f)),
+                        new Color(0.95f, 0.72f, 0.35f), "conveyor_arrow");
+                }
+            }
+
             foreach (var (lever, gate) in composer.Latches)
             {
                 AddChild(new LeverSwitch { Name = $"Lever{lever.X:F0}", Position = lever });
@@ -600,7 +626,7 @@ public partial class DungeonRoomBuilder : Node3D
                         .Add(ChunkKind.Gauntlet, 0.7f)
 
                         .Add(ChunkKind.Latch)
-                        .Add(ChunkKind.Chasm, 0.85f)
+                        .Add(ChunkKind.Current)
                         .Add(ChunkKind.Rift)
                         .Add(ChunkKind.DashGap, 0.9f)
                         .Add(ChunkKind.Spikes)
@@ -854,6 +880,38 @@ public partial class DungeonRoomBuilder : Node3D
 
     /// One platform: visual tiles on the 4-unit grid, and ONE box collider for
     /// the whole span.
+    /// The conveyor speed under a point, or zero. Matched by POSITION because
+    /// the composer records stretches of corridor while the builder lays
+    /// four-metre tiles on a grid the composer never sees -- a flag on a rect
+    /// would have to survive that slicing, and it would not.
+    private System.Collections.Generic.IReadOnlyList<(float X0, float X1, float Velocity)> _conveyors
+        = System.Array.Empty<(float, float, float)>();
+
+    /// TEST SEAM. The conveyor stretches of the room as built, so a check can
+    /// find them instead of remembering a coordinate.
+    public System.Collections.Generic.IReadOnlyList<(float X0, float X1, float Velocity)> LastConveyors
+        => _conveyors;
+
+    /// The floor height under a conveyor stretch, taken from the rect the
+    /// stretch sits on rather than assumed to be zero: Current can follow a
+    /// StepUp, and an arrow floating at y=0 under a raised corridor is worse
+    /// than no arrow.
+    private float ConveyorFloorY(float x)
+    {
+        float best = 0f;
+        if (LastComposedRects == null) return best;
+        foreach (var r in LastComposedRects)
+            if (x >= r.X && x <= r.X + r.Width) best = r.Y;
+        return best;
+    }
+
+    private float ConveyorAt(float x)
+    {
+        foreach (var (x0, x1, v) in _conveyors)
+            if (x >= x0 && x <= x1) return v;
+        return 0f;
+    }
+
     private void PlacePlatform(PlatformRect r)
     {
         int tiles = Mathf.Max(1, Mathf.CeilToInt(r.Width / Grid));
@@ -901,6 +959,12 @@ public partial class DungeonRoomBuilder : Node3D
             Position = new Vector3(r.X + span * 0.5f, r.Y - 0.075f, 0f),
             CollisionLayer = PhysicsLayers.World,
             CollisionMask = 0,
+            // A moving floor, and Godot already knows how to do this:
+            // MoveAndSlide reads a static body's ConstantLinearVelocity and
+            // carries whatever stands on it. No coupling, no per-frame nudge
+            // fighting the controller's own integration, and nothing in
+            // PlayerCamera has to learn that conveyors exist.
+            ConstantLinearVelocity = new Vector3(ConveyorAt(r.X + span * 0.5f), 0f, 0f),
         };
         body.AddChild(new CollisionShape3D
         {

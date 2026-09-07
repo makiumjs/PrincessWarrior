@@ -388,6 +388,25 @@ hand-guessed distance.
   | `Rift` | a drop straight into a gap, with no runway at the bottom |
   | `Sweep` | timing: a flat corridor under swinging axes |
   | `Latch` | an act: a barrier that opens when its lever is struck |
+  | `Current` | a floor that carries: against you, then with you, then a gap |
+
+  `Current` is the moving platform, in the only shape the harness can prove. A
+  platform you RIDE is a rhythm the traversal bot cannot witness -- it holds
+  right and never waits, and a bot taught to wait becomes a better player and a
+  worse witness, which is the wrong trade when the whole metric contract rests
+  on a deliberately clumsy one crossing rooms. A moving FLOOR composes with
+  holding right instead of fighting it.
+
+  Godot already implements it: `StaticBody3D.ConstantLinearVelocity` is read by
+  `MoveAndSlide`, so the platform bodies the builder already creates carry
+  whatever stands on them with no per-frame nudge fighting the controller's own
+  integration and nothing in PlayerCamera learning that conveyors exist. The
+  speeds are fractions of `MoveSpeed` rather than metres picked by eye: the drag
+  has to leave a bot holding right still advancing, or the chunk is unprovable.
+
+  Conveyor stretches are recorded as SPANS and matched by position, because a
+  conveyor is a length of corridor while the builder lays four-metre tiles on a
+  grid the composer never sees.
 
   `Latch` is the only one that asks the player to ACT on the level rather than
   cross it. Everything else in this game is walk-into-it -- a checkpoint

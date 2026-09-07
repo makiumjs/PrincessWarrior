@@ -1473,3 +1473,46 @@ telling you what collided is a check you have to debug before you can use it.
 The two living humans are a design decision rather than a shortage: a crypt of
 skeletons with a living Warden at the end, and one living sentry among them, is
 the cheapest way to make the boss read as the boss.
+
+## The moving platform, in the only shape the harness could prove
+
+There was no moving platform in this game for a reason that had nothing to do
+with difficulty: a platform you RIDE is a rhythm the traversal bot cannot
+witness. It holds right and never waits, and a bot taught to wait becomes a
+better player and a worse witness -- which is the wrong trade when the whole
+Spatial Metric Contract rests on a deliberately clumsy one crossing rooms.
+
+A moving FLOOR composes with holding right instead of fighting it. `Current`
+drags you back over one stretch, throws you forward over the next, and ends in a
+gap sized between a running jump and a dash jump, so the same button produces
+two speeds and the gap is entered carrying something.
+
+Godot already implements the mechanic: `StaticBody3D.ConstantLinearVelocity` is
+read by `MoveAndSlide`. The platform bodies the builder already creates carry
+whatever stands on them -- no per-frame nudge fighting the controller's own
+integration, no new coupling, and nothing in PlayerCamera has to learn that
+conveyors exist. The speeds are fractions of `MoveSpeed` rather than metres
+picked by eye, because the drag has to leave a bot holding right still
+advancing or the chunk cannot be proven at all.
+
+**The check does not ask whether the chunk can be crossed.** The bot crossed it
+in 289 frames whether or not the floor moved, because the drag is a fraction of
+its run speed. Crossability was simply the wrong question. It stands the player
+still, with no input, on each stretch and measures the drift: standing still is
+the only state in which the floor's own motion is the only thing moving you.
+Measured -2.50m and +3.21m in a second against spans of -3 and +4 m/s; zeroing
+`ConstantLinearVelocity` gives 0.00 and 0.00 and turns it red.
+
+**Two things had to be looked at rather than reasoned about.** The first arrow
+markings used the pack's `signage_arrows_right`, which is an arrow ON A POST: a
+corridor of them stood a row of yellow road signs between the camera and the
+player, and the screenshot showed nothing else. They are a floor panel now, a
+1-metre block squashed to four centimetres -- normally the exact thing this file
+warns against, since a squashed kit piece reads as a smeared box, but a block
+flattened to a marking is a marking and the arrow relief survives it.
+
+The second was placement. The first version put a 33-metre conveyor inside the
+late layout that already asks for a 30-metre climb, and the bot stalled at 92%
+of that room after 5929 frames, having climbed 29.7 of the 30.4 it needed. The
+fix was not a bigger budget: a conveyor belongs in the layout that runs, not the
+one that climbs. Moved, the room crossed in 2105.

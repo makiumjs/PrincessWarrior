@@ -71,7 +71,7 @@ at a class the running assembly does not have yet produced four engine errors
 in checks that had nothing to do with the edit. Both times the result looked
 like a finding and was an artefact.
 
-Sixty-two checks, in order:
+Sixty-three checks, in order:
 
 1. the build compiles
 2. the main scene boots without errors
@@ -160,7 +160,9 @@ Sixty-two checks, in order:
     is not the Warden
 61. a barrier holds until its lever is struck, and only then does the player
     pass -- the one thing in the game the player does TO the level
-62. no check from 3 onward printed an engine error while reaching its own PASS
+62. one stretch of floor drags a standing player backwards and the next
+    carries them forwards -- the moving platform, in the shape a bot can prove
+63. no check from 3 onward printed an engine error while reaching its own PASS
 
 **One unresolved intermittent.** The engine-quiet check fired on two consecutive gate runs
 immediately after a rebuild, naming engine errors, and has passed on the
