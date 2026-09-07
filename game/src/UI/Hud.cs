@@ -4,7 +4,11 @@ using LostCrownlike.Core;
 namespace LostCrownlike.UI;
 
 /// <summary>
-/// Player HUD: health bar, unlocked-ability icons, transient checkpoint prompt.
+/// Player HUD: health bar, boss bar, transient checkpoint prompt.
+///
+/// The ability icons are gone with the crystals. Four slots that light up one
+/// by one say "you are collecting things"; four slots lit from the first frame
+/// say nothing at all, and cost screen.
 /// Pure consumer of LostCrownlike.Core.EventBus — never references PlayerController
 /// or any other subsystem's types (see ARCHITECTURE.md "### UI").
 /// </summary>
@@ -16,10 +20,6 @@ public partial class Hud : Control
 
     private ProgressBar _healthBar;
     private Label _healthLabel;
-    private Control _abilityDoubleJump;
-    private Control _abilityDash;
-    private Control _abilityWallJump;
-    private Control _abilityChargeAttack;
     private Label _checkpointPrompt;
     private Timer _checkpointTimer;
     private Label _runCompleteBanner;
@@ -32,10 +32,6 @@ public partial class Hud : Control
     {
         _healthBar = GetNode<ProgressBar>("%HealthBar");
         _healthLabel = GetNode<Label>("%HealthLabel");
-        _abilityDoubleJump = GetNode<Control>("%AbilityDoubleJump");
-        _abilityDash = GetNode<Control>("%AbilityDash");
-        _abilityWallJump = GetNode<Control>("%AbilityWallJump");
-        _abilityChargeAttack = GetNode<Control>("%AbilityChargeAttack");
         _checkpointPrompt = GetNode<Label>("%CheckpointPrompt");
         _checkpointTimer = GetNode<Timer>("%CheckpointTimer");
 
@@ -43,11 +39,6 @@ public partial class Hud : Control
         _healthBar.MaxValue = MaxHealth;
         _healthBar.Value = _currentHealth;
         UpdateHealthLabel();
-
-        _abilityDoubleJump.Visible = false;
-        _abilityDash.Visible = false;
-        _abilityWallJump.Visible = false;
-        _abilityChargeAttack.Visible = false;
         _checkpointPrompt.Visible = false;
 
         _checkpointTimer.OneShot = true;
@@ -85,7 +76,6 @@ public partial class Hud : Control
             EventBus.Instance.PlayerDamaged += OnPlayerDamaged;
             EventBus.Instance.PlayerHealthChanged += OnPlayerHealthChanged;
             EventBus.Instance.PlayerDied += OnPlayerDied;
-            EventBus.Instance.AbilityUnlocked += OnAbilityUnlocked;
             EventBus.Instance.CheckpointReached += OnCheckpointReached;
             EventBus.Instance.RunCompleted += OnRunCompleted;
             EventBus.Instance.BossStateChanged += OnBossStateChanged;
@@ -105,7 +95,6 @@ public partial class Hud : Control
             EventBus.Instance.PlayerDamaged -= OnPlayerDamaged;
             EventBus.Instance.PlayerHealthChanged -= OnPlayerHealthChanged;
             EventBus.Instance.PlayerDied -= OnPlayerDied;
-            EventBus.Instance.AbilityUnlocked -= OnAbilityUnlocked;
             EventBus.Instance.CheckpointReached -= OnCheckpointReached;
             EventBus.Instance.BossStateChanged -= OnBossStateChanged;
             EventBus.Instance.RoomEntered -= OnRoomEntered;
@@ -144,15 +133,7 @@ public partial class Hud : Control
         // player showing 0/100 for the rest of the run.
     }
 
-    private void OnAbilityUnlocked(int abilityBits)
-    {
-        var ability = (AbilityFlags)abilityBits;
-        if (ability.HasFlag(AbilityFlags.DoubleJump)) _abilityDoubleJump.Visible = true;
-        if (ability.HasFlag(AbilityFlags.Dash)) _abilityDash.Visible = true;
-        if (ability.HasFlag(AbilityFlags.WallJump)) _abilityWallJump.Visible = true;
-        if (ability.HasFlag(AbilityFlags.ChargeAttack)) _abilityChargeAttack.Visible = true;
-    }
-
+    
     private void OnCheckpointReached(string checkpointId)
     {
         _checkpointPrompt.Text = $"Checkpoint Reached: {checkpointId}";

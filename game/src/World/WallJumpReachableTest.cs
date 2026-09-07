@@ -45,27 +45,29 @@ public partial class WallJumpReachableTest : Node
 
         if (_f == 30)
         {
-            int walls = 0, pickups = 0;
+            // The pickup half of this check is gone with the crystals. What
+            // remains is the half that found the original defect: WallJump was
+            // implemented, in AbilityFlags, drawn in the HUD -- and NO SURFACE
+            // IN THE GAME had collision to slide on. Owning an ability from the
+            // first frame does not make it content.
+            int walls = 0;
             foreach (var c in _room.GetChildren())
             {
-                if (c is AbilityPickup p && p.Ability == AbilityFlags.WallJump) pickups++;
                 if (c is StaticBody3D b && b.GetChildCount() > 0
                     && b.GetChild(0) is CollisionShape3D cs
                     && cs.Shape is BoxShape3D box && box.Size.Y > 3f) walls++;
             }
-            GD.Print($"[WALLJUMP] room {_room.RoomIndex} contains {pickups} WallJump pickup(s) and {walls} climbable wall(s)");
+            GD.Print($"[WALLJUMP] room {_room.RoomIndex} contains {walls} climbable wall(s)");
 
-            if (pickups == 0 || walls == 0)
+            if (walls == 0)
             {
-                GD.Print("[WALLJUMP] RESULT: FAIL (ability is unreachable content)");
+                GD.Print("[WALLJUMP] RESULT: FAIL (nothing in the room can be slid on)");
                 GetTree().Quit();
                 return;
             }
         }
-
-        // Grant it and drive the player into the shaft to confirm the surface
-        // actually registers as wall-slidable.
-        if (_f == 40) EventBus.Instance.EmitAbilityUnlocked(AbilityFlags.WallJump);
+        // Drive the player into the shaft to confirm the surface really
+        // registers as wall-slidable rather than merely being tall.
         if (_f == 45) Input.ActionPress("move_right");
         if (_f is > 50 and < 400 && _f % 20 == 0) Input.ActionPress("jump");
         if (_f is > 50 and < 400 && _f % 20 == 3) Input.ActionRelease("jump");
@@ -73,7 +75,7 @@ public partial class WallJumpReachableTest : Node
         if (_f == 400)
         {
             GD.Print(_granted || _wallJumped
-                ? "[WALLJUMP] RESULT: PASS (granted by a pickup, and a climbable surface exists)"
+                ? "[WALLJUMP] RESULT: PASS (a climbable surface exists and the player slides on it)"
                 : "[WALLJUMP] RESULT: FAIL");
             GetTree().Quit();
         }

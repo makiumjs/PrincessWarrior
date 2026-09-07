@@ -240,7 +240,7 @@ public partial class DungeonRoomBuilder : Node3D
         metrics.VerifyAgainst(GetTree()?.GetFirstNodeInGroup("player"));
 
         var composer = string.IsNullOrEmpty(ChunkUnderTest)
-            ? ComposeRoom(metrics, RoomIndex)
+            ? ComposeRoom(metrics, RoomIndex, RunLength)
             : ComposeSingleChunk(metrics, ChunkUnderTest);
 
         LastComposedRects = composer.Rects;
@@ -289,7 +289,6 @@ public partial class DungeonRoomBuilder : Node3D
         }
         yield return () => SpawnEncounters(composer);
         yield return () => SpawnCheckpoints(composer);
-        yield return () => SpawnAbilityPickups(composer);
         yield return () => SpawnArenaGates(composer);
         yield return () => SpawnExit(composer);
         yield return FlushBatches;
@@ -337,21 +336,14 @@ public partial class DungeonRoomBuilder : Node3D
     {
         var metrics = new PlayerMetrics();
         for (int i = 0; i < RunLength; i++)
-            foreach (var built in ComposeRoom(metrics, i).Kinds)
+            foreach (var built in ComposeRoom(metrics, i, RunLength).Kinds)
                 if (built == kind) return i;
         return -1;
     }
 
     /// The first room that offers an ability crystal at all. Room 0 has none
     /// by design now: it is the room that teaches jumping.
-    public int FirstRoomWithAbilityPickup()
-    {
-        var metrics = new PlayerMetrics();
-        for (int i = 0; i < RunLength; i++)
-            if (ComposeRoom(metrics, i).AbilityGrants.Count > 0) return i;
-        return -1;
-    }
-
+    
     /// Which chunk a room is allowed to build, and what it builds instead.
     ///
     /// The layouts are hand-ordered and every one of them opens with the
@@ -374,19 +366,38 @@ public partial class DungeonRoomBuilder : Node3D
     /// deliberately clumsy player; the old arrangement hid that by handing out
     /// Double Jump in the opening forty metres. It is the ability that makes
     /// every other obstacle forgiving, so it is the one that goes early.
-    private static ChunkKind Allowed(ChunkKind kind, int index) => kind switch
-    {
-        ChunkKind.Chimney when index < 1 => ChunkKind.StepUp,
-        ChunkKind.DashGap when index < 2 => ChunkKind.Gap,
-        ChunkKind.Arena when index < 3 => ChunkKind.Gauntlet,
-        ChunkKind.WallShaft when index < 4 => ChunkKind.StepUp,
-        _ => kind,
-    };
 
     /// Room layouts. Hand-ordered rather than randomised: a metroidvania's
     /// rooms are authored, and the metric contract already guarantees every
     /// sequence here is traversable whatever the player's jump is tuned to.
-    private static MicroChunkComposer ComposeRoom(PlayerMetrics m, int index)
+    /// Which layout a room gets, and it is a BAG rather than a modulo.
+    ///
+    /// `index % 3` is periodic by construction: over ten rooms it deals layout
+    /// 0 four times and the others three, and it guarantees room 6 is room 0
+    /// with a steeper ramp. That is the shape of the complaint -- the second
+    /// half is the first half with bigger numbers.
+    ///
+    /// Two things change here. Each half deals every layout once before any
+    /// repeat, with the bags ordered so no two neighbouring rooms share one;
+    /// and the second half draws from a DIFFERENT SET, so room 6 is not room 0
+    /// however the numbers land.
+    private static readonly int[][] LayoutBags =
+    {
+        new[] { 0, 1, 2 },
+        new[] { 1, 0, 2 },
+        new[] { 0, 2, 1 },
+        new[] { 2, 0, 1 },
+    };
+
+    public static bool IsSecondHalf(int index, int total) => index * 2 >= total;
+
+    public static int LayoutFor(int index, int total)
+    {
+        int k = index - (IsSecondHalf(index, total) ? (total + 1) / 2 : 0);
+        return LayoutBags[(k / 3) % LayoutBags.Length][k % 3];
+    }
+
+    private static MicroChunkComposer ComposeRoom(PlayerMetrics m, int index, int total)
     {
         // Ramp: the opening room runs at 55% obstacle size and grows from
         // there, so the first gap teaches the jump instead of executing the
@@ -408,85 +419,204 @@ public partial class DungeonRoomBuilder : Node3D
         // Descents are interleaved deliberately. Built only of ascents, the
         // tripled rooms climbed past 30 metres and turned into staircases --
         // and a staircase is one idea repeated, not a place.
-        switch (index % 3)
+        // The last room is the Warden's, and it gets a shape rather than a
+        // number. Under `index % 3` it inherited whichever layout the cycle
+        // happened to land on; under the late set it drew the climb, and a
+        // 35-metre ascent immediately before the only boss in a twelve-minute
+        // run is a stairwell with a fight at the top. This is short, flat and
+        // wide: you walk in, the door seals behind you, and the room is the
+        // fight.
+        if (index == total - 1) return BossLayout(c, index);
+
+        return IsSecondHalf(index, total)
+            ? LateLayout(c, index, LayoutFor(index, total))
+            : EarlyLayout(c, index, LayoutFor(index, total));
+    }
+
+    private static MicroChunkComposer BossLayout(MicroChunkComposer c, int index) =>
+        c.Add(ChunkKind.Gauntlet, 0.7f)
+         .Add(ChunkKind.Spikes)
+         .Add(ChunkKind.Gauntlet)
+         .Add(ChunkKind.Gauntlet)
+         .Add(ChunkKind.Gauntlet);
+
+    /// The first half: one verb at a time, each chunk testing what the room
+    /// before it granted.
+    private static MicroChunkComposer EarlyLayout(MicroChunkComposer c, int index, int layout)
+    {
+        switch (layout)
         {
             case 0:
                 // Opens with flat ground and a step, not a hole.
-                return c.Add(Allowed(ChunkKind.Gauntlet, index))
-                        .Add(Allowed(ChunkKind.StepUp, index), 0.6f)
-                        .Add(Allowed(ChunkKind.Spikes, index))
-                        .Add(Allowed(ChunkKind.Gap, index))
-                        .Add(Allowed(ChunkKind.StepUp, index))
-                        .Add(Allowed(ChunkKind.DashGap, index))
-                        .Add(Allowed(ChunkKind.Chimney, index))
-                        .Add(Allowed(ChunkKind.Gauntlet, index))
+                return c.Add(ChunkKind.Gauntlet)
+                        .Add(ChunkKind.StepUp, 0.6f)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Gap)
+                        .Add(ChunkKind.StepUp)
+                        .Add(ChunkKind.DashGap)
+                        .Add(ChunkKind.Chimney)
+                        .Add(ChunkKind.Gauntlet)
 
-                        .Add(Allowed(ChunkKind.Drop, index))
-                        .Add(Allowed(ChunkKind.Gap, index), 0.85f)
-                        .Add(Allowed(ChunkKind.Spikes, index))
-                        .Add(Allowed(ChunkKind.StepUp, index), 0.9f)
-                        .Add(Allowed(ChunkKind.Gauntlet, index), 0.7f)
-                        .Add(Allowed(ChunkKind.DashGap, index), 0.9f)
-                        .Add(Allowed(ChunkKind.Chimney, index), 0.85f)
-                        .Add(Allowed(ChunkKind.Gauntlet, index))
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Gap, 0.85f)
+                        .Add(ChunkKind.Spikes)
+                        // Layout 0 carries its own wall jump, and it has to.
+                        // Under `index % 3` this layout only ever ran at rooms
+                        // 0, 3, 6 and 9 -- and at 6 and 9 the player already had
+                        // WallJump from a layout-1 room. Dealing layouts from a
+                        // bag put it at room 4 instead, without the ability, and
+                        // the traversal bot fell out of the world at 101% of the
+                        // room: crossed at difficulty 0.71 with no wall jumps at
+                        // all, and unrecoverable at 0.78. A layout whose
+                        // crossability depends on what a DIFFERENT layout
+                        // happened to grant is not a layout, it is a coincidence.
+                        .Add(ChunkKind.WallShaft, 0.85f)
+                        .Add(ChunkKind.StepUp, 0.9f)
+                        .Add(ChunkKind.Gauntlet, 0.7f)
+                        .Add(ChunkKind.DashGap, 0.9f)
+                        .Add(ChunkKind.Chimney, 0.85f)
+                        .Add(ChunkKind.Gauntlet)
 
-                        .Add(Allowed(ChunkKind.Drop, index))
-                        .Add(Allowed(ChunkKind.Gap, index))
-                        .Add(Allowed(ChunkKind.Spikes, index))
-                        .Add(Allowed(ChunkKind.StepUp, index))
-                        .Add(Allowed(ChunkKind.DashGap, index))
-                        .Add(Allowed(ChunkKind.Gap, index), 0.8f)
-                        .Add(Allowed(ChunkKind.Gauntlet, index));
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Gap)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.StepUp)
+                        .Add(ChunkKind.DashGap)
+                        .Add(ChunkKind.Gap, 0.8f)
+                        .Add(ChunkKind.Gauntlet);
             case 1:
-                return c.Add(Allowed(ChunkKind.Gauntlet, index))
-                        .Add(Allowed(ChunkKind.WallShaft, index))
-                        .Add(Allowed(ChunkKind.Gap, index), 0.9f)
-                        .Add(Allowed(ChunkKind.Gap, index), 0.7f)
-                        .Add(Allowed(ChunkKind.Gauntlet, index))
-                        .Add(Allowed(ChunkKind.Chimney, index), 0.8f)
-                        .Add(Allowed(ChunkKind.DashGap, index), 0.8f)
-                        .Add(Allowed(ChunkKind.Gauntlet, index))
+                return c.Add(ChunkKind.Gauntlet)
+                        .Add(ChunkKind.WallShaft)
+                        .Add(ChunkKind.Gap, 0.9f)
+                        .Add(ChunkKind.Gap, 0.7f)
+                        .Add(ChunkKind.Gauntlet)
+                        .Add(ChunkKind.Chimney, 0.8f)
+                        .Add(ChunkKind.DashGap, 0.8f)
+                        .Add(ChunkKind.Gauntlet)
 
-                        .Add(Allowed(ChunkKind.Drop, index))
-                        .Add(Allowed(ChunkKind.Spikes, index))
-                        .Add(Allowed(ChunkKind.Gap, index), 0.8f)
-                        .Add(Allowed(ChunkKind.Gauntlet, index), 0.7f)
-                        .Add(Allowed(ChunkKind.Chimney, index))
-                        .Add(Allowed(ChunkKind.Drop, index))
-                        .Add(Allowed(ChunkKind.Gap, index), 0.9f)
-                        .Add(Allowed(ChunkKind.Gauntlet, index))
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Gap, 0.8f)
+                        .Add(ChunkKind.Gauntlet, 0.7f)
+                        .Add(ChunkKind.Chimney)
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Gap, 0.9f)
+                        .Add(ChunkKind.Gauntlet)
 
-                        .Add(Allowed(ChunkKind.WallShaft, index), 0.8f)
-                        .Add(Allowed(ChunkKind.DashGap, index))
-                        .Add(Allowed(ChunkKind.Drop, index))
-                        .Add(Allowed(ChunkKind.Chimney, index), 0.85f)
-                        .Add(Allowed(ChunkKind.Spikes, index))
-                        .Add(Allowed(ChunkKind.Gauntlet, index));
+                        .Add(ChunkKind.WallShaft, 0.8f)
+                        .Add(ChunkKind.DashGap)
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Chimney, 0.85f)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Gauntlet);
             default:
-                return c.Add(Allowed(ChunkKind.Gauntlet, index))
-                        .Add(Allowed(ChunkKind.Arena, index))
-                        .Add(Allowed(ChunkKind.Chimney, index))
-                        .Add(Allowed(ChunkKind.DashGap, index))
-                        .Add(Allowed(ChunkKind.Gauntlet, index), 0.7f)
-                        .Add(Allowed(ChunkKind.Gap, index))
-                        .Add(Allowed(ChunkKind.StepUp, index))
-                        .Add(Allowed(ChunkKind.Gauntlet, index))
+                return c.Add(ChunkKind.Gauntlet)
+                        .Add(ChunkKind.Arena)
+                        .Add(ChunkKind.Chimney)
+                        .Add(ChunkKind.DashGap)
+                        .Add(ChunkKind.Gauntlet, 0.7f)
+                        .Add(ChunkKind.Gap)
+                        .Add(ChunkKind.StepUp)
+                        .Add(ChunkKind.Gauntlet)
 
-                        .Add(Allowed(ChunkKind.Drop, index))
-                        .Add(Allowed(ChunkKind.Spikes, index))
-                        .Add(Allowed(ChunkKind.Gap, index), 0.85f)
-                        .Add(Allowed(ChunkKind.Arena, index))
-                        .Add(Allowed(ChunkKind.Chimney, index), 0.9f)
-                        .Add(Allowed(ChunkKind.Drop, index))
-                        .Add(Allowed(ChunkKind.DashGap, index), 0.85f)
-                        .Add(Allowed(ChunkKind.Gauntlet, index))
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Gap, 0.85f)
+                        .Add(ChunkKind.Arena)
+                        .Add(ChunkKind.Chimney, 0.9f)
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.DashGap, 0.85f)
+                        .Add(ChunkKind.Gauntlet)
 
-                        .Add(Allowed(ChunkKind.StepUp, index))
-                        .Add(Allowed(ChunkKind.Spikes, index))
-                        .Add(Allowed(ChunkKind.Gap, index), 0.8f)
-                        .Add(Allowed(ChunkKind.Drop, index))
-                        .Add(Allowed(ChunkKind.Chimney, index))
-                        .Add(Allowed(ChunkKind.Gauntlet, index));
+                        .Add(ChunkKind.StepUp)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Gap, 0.8f)
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Chimney)
+                        .Add(ChunkKind.Gauntlet);
+        }
+    }
+
+    /// The second half, and it exists because the first half had already said
+    /// everything by the room that grants the last ability. These layouts are
+    /// built from the composition kinds -- Chasm wants dash AND wall jump in one
+    /// breath, Rift wants momentum carried through a fall -- so the back of the
+    /// run asks a different question rather than the same one louder.
+    ///
+    /// Each has a character. 0 climbs, 1 runs, 2 fights.
+    private static MicroChunkComposer LateLayout(MicroChunkComposer c, int index, int layout)
+    {
+        switch (layout)
+        {
+            case 0:
+                // The climb. Height is the through-line: every flat stretch is
+                // a landing between two ascents rather than a corridor.
+                return c.Add(ChunkKind.Gauntlet, 0.7f)
+                        .Add(ChunkKind.WallShaft)
+                        .Add(ChunkKind.Chasm)
+                        .Add(ChunkKind.Chimney)
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Gap, 0.9f)
+                        .Add(ChunkKind.Gauntlet)
+
+                        .Add(ChunkKind.Chasm, 0.9f)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.WallShaft, 0.9f)
+                        .Add(ChunkKind.Rift)
+                        .Add(ChunkKind.Gauntlet, 0.7f)
+                        .Add(ChunkKind.Chimney)
+
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Chasm)
+                        .Add(ChunkKind.Gap, 0.85f)
+                        .Add(ChunkKind.Arena)
+                        .Add(ChunkKind.Gauntlet);
+            case 1:
+                // The run. Rift and Drop chained so height is spent rather than
+                // gained, and the flat pieces are short: this is the layout that
+                // punishes stopping.
+                return c.Add(ChunkKind.Gauntlet, 0.7f)
+                        .Add(ChunkKind.Rift)
+                        .Add(ChunkKind.DashGap)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Rift, 0.9f)
+                        .Add(ChunkKind.Gap)
+                        .Add(ChunkKind.Gauntlet, 0.7f)
+
+                        .Add(ChunkKind.StepUp)
+                        .Add(ChunkKind.Chasm, 0.85f)
+                        .Add(ChunkKind.Rift)
+                        .Add(ChunkKind.DashGap, 0.9f)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Gauntlet)
+
+                        .Add(ChunkKind.Chimney, 0.85f)
+                        .Add(ChunkKind.Rift)
+                        .Add(ChunkKind.Gap, 0.9f)
+                        .Add(ChunkKind.DashGap)
+                        .Add(ChunkKind.Gauntlet);
+            default:
+                // The fight. Two arenas, and the traversal between them is short
+                // enough that the room reads as a place you are held rather than
+                // a corridor with encounters in it.
+                return c.Add(ChunkKind.Gauntlet)
+                        .Add(ChunkKind.Arena)
+                        .Add(ChunkKind.Chasm)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Gauntlet)
+                        .Add(ChunkKind.Rift, 0.9f)
+
+                        .Add(ChunkKind.Arena)
+                        .Add(ChunkKind.Chimney, 0.9f)
+                        .Add(ChunkKind.Drop)
+                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Gauntlet, 0.7f)
+                        .Add(ChunkKind.WallShaft, 0.9f)
+
+                        .Add(ChunkKind.Chasm, 0.9f)
+                        .Add(ChunkKind.Gap)
+                        .Add(ChunkKind.Arena)
+                        .Add(ChunkKind.Gauntlet);
         }
     }
 
@@ -527,41 +657,7 @@ public partial class DungeonRoomBuilder : Node3D
     }
 
     /// Drops each ability pickup in front of the obstacle that needs it.
-    private void SpawnAbilityPickups(MicroChunkComposer composer)
-    {
-        // What the player already has, so a later room does not litter the
-        // floor with a second Dash crystal the player cannot use. Read from the
-        // live player when there is one (it is the authority mid-run), falling
-        // back to the save for a room built before the player exists.
-        var owned = AbilityFlags.None;
-        if (GetTree()?.GetFirstNodeInGroup("player") is Node playerNode)
-            owned = (AbilityFlags)(int)playerNode.Get("UnlockedAbilities");
-        else if (Save.SaveManager.Instance?.Current != null)
-            owned = Save.SaveManager.Instance.Current.UnlockedAbilities;
-
-        // What THIS room has already put down, as well as what the player
-        // already has. The comment above only ever covered the across-rooms
-        // case, and that was enough while a room held one of each obstacle.
-        // The tripled layouts hold three DashGaps and three Chimneys, and
-        // every one of them asks for its ability -- so room 0 laid out three
-        // Dash crystals and three Double Jump crystals, five of them useless
-        // the moment the first was touched.
-        var granted = AbilityFlags.None;
-
-        foreach (var (position, abilityName) in composer.AbilityGrants)
-        {
-            if (!System.Enum.TryParse(abilityName, out AbilityFlags ability))
-            {
-                GD.PushError($"DungeonRoomBuilder: unknown ability '{abilityName}'");
-                continue;
-            }
-            if (owned.HasFlag(ability) || granted.HasFlag(ability))
-                continue;
-            granted |= ability;
-            AddChild(new AbilityPickup { Ability = ability, Position = position });
-        }
-    }
-
+    
     /// A checkpoint at the start of each Gauntlet. Without these the
     /// die-and-respawn loop cannot happen in a generated room at all: Save
     /// records a position only when CheckpointReached fires, so a player who

@@ -1,7 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://c2h8f4dqk8xw1"]
 
 [ext_resource type="Script" path="res://src/UI/Hud.cs" id="1_hud"]
-[ext_resource type="Script" path="res://src/UI/AbilityIcon.cs" id="2_icon"]
 
 [node name="Hud" type="Control"]
 layout_mode = 3
@@ -35,84 +34,6 @@ layout_mode = 2
 horizontal_alignment = 1
 vertical_alignment = 1
 text = "100 / 100"
-
-[node name="AbilitiesBox" type="HBoxContainer" parent="."]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 0
-offset_left = 24.0
-offset_top = 76.0
-offset_right = 400.0
-offset_bottom = 140.0
-theme_override_constants/separation = 12
-
-[node name="AbilityDoubleJump" type="VBoxContainer" parent="AbilitiesBox"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-
-[node name="Icon" type="Control" parent="AbilitiesBox/AbilityDoubleJump"]
-custom_minimum_size = Vector2(40, 40)
-layout_mode = 2
-size_flags_horizontal = 4
-script = ExtResource("2_icon")
-Ability = 1
-
-[node name="Label" type="Label" parent="AbilitiesBox/AbilityDoubleJump"]
-layout_mode = 2
-horizontal_alignment = 1
-text = "Double Jump"
-
-[node name="AbilityDash" type="VBoxContainer" parent="AbilitiesBox"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-
-[node name="Icon" type="Control" parent="AbilitiesBox/AbilityDash"]
-custom_minimum_size = Vector2(40, 40)
-layout_mode = 2
-size_flags_horizontal = 4
-script = ExtResource("2_icon")
-Ability = 2
-
-[node name="Label" type="Label" parent="AbilitiesBox/AbilityDash"]
-layout_mode = 2
-horizontal_alignment = 1
-text = "Dash"
-
-[node name="AbilityWallJump" type="VBoxContainer" parent="AbilitiesBox"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-
-[node name="Icon" type="Control" parent="AbilitiesBox/AbilityWallJump"]
-custom_minimum_size = Vector2(40, 40)
-layout_mode = 2
-size_flags_horizontal = 4
-script = ExtResource("2_icon")
-Ability = 4
-
-[node name="Label" type="Label" parent="AbilitiesBox/AbilityWallJump"]
-layout_mode = 2
-horizontal_alignment = 1
-text = "Wall Jump"
-
-[node name="AbilityChargeAttack" type="VBoxContainer" parent="AbilitiesBox"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-
-[node name="Icon" type="Control" parent="AbilitiesBox/AbilityChargeAttack"]
-custom_minimum_size = Vector2(40, 40)
-layout_mode = 2
-size_flags_horizontal = 4
-script = ExtResource("2_icon")
-Ability = 8
-
-[node name="Label" type="Label" parent="AbilitiesBox/AbilityChargeAttack"]
-layout_mode = 2
-horizontal_alignment = 1
-text = "Charge Attack"
 
 [node name="CheckpointPrompt" type="Label" parent="."]
 unique_name_in_owner = true

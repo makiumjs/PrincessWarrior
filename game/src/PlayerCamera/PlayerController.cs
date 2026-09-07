@@ -78,8 +78,10 @@ public partial class PlayerController : CharacterBody3D, IDamageable
     // subsystem exists to drive AbilityUnlocked events. World/Save can
     // still override this at runtime (see AbilityUnlocked subscription
     // below) or overwrite it directly from loaded SaveData.
-    [Export] public AbilityFlags UnlockedAbilities { get; set; } =
-        AbilityFlags.DoubleJump | AbilityFlags.Dash | AbilityFlags.WallJump;
+    /// Everything, from the first frame. See AbilityFlags.All for why the
+    /// crystals went: without backtracking a gate is not a locked door, it is a
+    /// chunk quietly made easier until a pickup appears.
+    [Export] public AbilityFlags UnlockedAbilities { get; set; } = AbilityFlags.All;
 
     // ------------------------------------------------------------------
     // Public read state

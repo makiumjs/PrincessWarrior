@@ -16,9 +16,10 @@ tools/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64.exe --path g
 combat, patrolling enemies, ability pickups, checkpoints, and an exit that
 leads to the next room.
 
-**Controls** — A/D or arrows to move, Space to jump (twice once Double Jump is
-picked up), Shift or K to dash, J or left mouse to attack, L or right mouse for
-a heavy attack, Escape to pause.
+**Controls** — A/D or arrows to move, Space to jump (twice: the double jump is
+yours from the start), Shift or K to dash, J or left mouse to attack, K to
+parry, L or right mouse for a heavy attack, Escape to pause. A gamepad works
+throughout, menus included.
 
 Always `dotnet build` from `game/` before running: Godot loads the compiled
 assembly, so C# edits are invisible until you build.
@@ -70,90 +71,90 @@ at a class the running assembly does not have yet produced four engine errors
 in checks that had nothing to do with the edit. Both times the result looked
 like a finding and was an artefact.
 
-Sixty-one checks, in order:
+Sixty checks, in order:
 
 1. the build compiles
 2. the main scene boots without errors
 3. the save round-trip persists to disk and restores the player
 4. all three scripted attacks connect
 5. the full loop: checkpoint → death → respawn at the checkpoint that was current
-6. abilities start locked, a pickup grants one, player and save agree; the
-   check resets the save itself rather than relying on running fourth
+6. the player owns every ability from the first frame, and no room
+   hands one out; the save agrees
 7. no enemy walks off a platform into a generated gap
 8. an enemy can actually damage the player — combat is not one-sided
-9. an ability earned in a previous session is still there after a restart
-10. dying before any checkpoint does not softlock the run
-11. a corrupt save file does not stop the game from booting
-12. pause actually stops the world, and it resumes afterwards
-13. abilities, health and the save survive a room rebuild
-14. repeated room rebuilds do not accumulate nodes
-15. WallJump is granted somewhere and has walls to be used on
-16. holding heavy deals more damage than tapping it — ChargeAttack is a mechanic
-17. a spike trap is generated and damages on a repeating cooldown
-18. the save is still loadable and matches memory after 20 rooms and 20 deaths
-19. 1500 frames of random input mashing produce no degenerate state, and reach
+9. dying before any checkpoint does not softlock the run
+10. a corrupt save file does not stop the game from booting
+11. pause actually stops the world, and it resumes afterwards
+12. abilities, health and the save survive a room rebuild
+13. repeated room rebuilds do not accumulate nodes
+14. WallJump is granted somewhere and has walls to be used on
+15. holding heavy deals more damage than tapping it — ChargeAttack is a mechanic
+16. a spike trap is generated and damages on a repeating cooldown
+17. the save is still loadable and matches memory after 20 rooms and 20 deaths
+18. 1500 frames of random input mashing produce no degenerate state, and reach
     8 of the 9 movement states
-20. wall slide — the ninth state, which mashing cannot reach — enters, clamps
+19. wall slide — the ninth state, which mashing cannot reach — enters, clamps
     the fall for as long as it lasts, and ENDS when the wall does
-21. the combo window escalates damage when chained and resets when it lapses
-22. no two of the nine procedural sounds are perceptually identical, measured
+20. the combo window escalates damage when chained and resets when it lapses
+21. no two of the nine procedural sounds are perceptually identical, measured
     by length, spectral centroid and noisiness
-23. falling out of the level kills the player and the run resumes
-24. coyote time — a jump pressed just after leaving a ledge still fires
-25. dash invulnerability — a hit landed mid-dash is ignored, the same hit later is not
-26. the camera follows the player and keeps it framed
-27. leaving and re-entering the same checkpoint announces it once, not every time
-28. an enemy that falls out of the level is removed, not left falling forever
-29. a rebuilt room does not re-offer an ability the player already owns, and
-    no room offers the same ability twice
-30. nothing leaves the X/Y movement plane under movement, jumps, dashes or attacks
-31. the run has an ending: ten rooms, one completion, and the save records it
-32. ranged enemies are placed, hurt at range, and leave no bolts behind
-33. one enemy type retreats after striking, one holds a stand-off, the default closes
-34. across a whole run every room is populated, every enemy type appears, a
+22. falling out of the level kills the player and the run resumes
+23. coyote time — a jump pressed just after leaving a ledge still fires
+24. dash invulnerability — a hit landed mid-dash is ignored, the same hit later is not
+25. the camera follows the player and keeps it framed
+26. leaving and re-entering the same checkpoint announces it once, not every time
+27. an enemy that falls out of the level is removed, not left falling forever
+28. nothing leaves the X/Y movement plane under movement, jumps, dashes or attacks
+29. the run has an ending: ten rooms, one completion, and the save records it
+30. ranged enemies are placed, hurt at range, and leave no bolts behind
+31. one enemy type retreats after striking, one holds a stand-off, the default closes
+32. across a whole run every room is populated, every enemy type appears, a
     room torn down under a live bolt leaves none behind, and the second half
     of the run holds more enemies than the first
-35. enemies account for real damage to a player who never hits back, and the
+33. enemies account for real damage to a player who never hits back, and the
     opening room does not kill one who stands still
-36. a reactive bot plays all ten rooms of a full run end to end with real
+34. a reactive bot plays all ten rooms of a full run end to end with real
     button presses and reaches each exit trigger
-37. a wall shaft of the size the generator builds can actually be climbed
-38. every one of the eight chunk kinds is clearable alone at full difficulty
-39. clips that describe a continuing state loop, on the player and on enemies
-40. a finished run can be restarted, and the save stops claiming it is finished
-41. every checkpoint in the hardest room stands on ground
-42. the model is still animating three seconds into a run, not holding a pose
-43. an incoming attack telegraphs: the arm draws back and the weapon lights up
-44. a guard stops a blow, and only a perfect one staggers the attacker
-45. corpses linger long enough to read, then sink and are freed
-46. spaced sounds never cut a still-playing voice off; a real burst still steals
-47. 4600 frames of real play WITH A RENDERER print no engine error
-48. the ambience bed runs continuously on its own voice, without starving the pool
-49. the pause menu is in the game, resumes cleanly, and restarts the run
-50. the game boots into a title, with no world running behind it, and Play
+35. a wall shaft of the size the generator builds can actually be climbed
+36. every one of the eight chunk kinds is clearable alone at full difficulty
+37. clips that describe a continuing state loop, on the player and on enemies
+38. a finished run can be restarted, and the save stops claiming it is finished
+39. every checkpoint in the hardest room stands on ground
+40. the model is still animating three seconds into a run, and the legs
+    keep running through a swing
+41. an incoming attack telegraphs: the arm draws back and the weapon lights up
+42. a guard stops a blow, and only a perfect one staggers the attacker
+43. corpses linger long enough to read, then sink and are freed
+44. spaced sounds never cut a still-playing voice off; a real burst still steals
+45. 4600 frames of real play WITH A RENDERER print no engine error
+46. the ambience bed runs continuously on its own voice, without starving the pool
+47. the pause menu is in the game, resumes cleanly, and restarts the run
+48. the game boots into a title, with no world running behind it, and Play
     starts the run; no key drives two actions at once
-51. the last room is a boss: armoured, a heavy blow is chip damage and does
+49. the last room is a boss: armoured, a heavy blow is chip damage and does
     not interrupt; parried open, the same blow lands in full; and the run
     cannot end while it lives
-52. a landed blow, a blow absorbed by armour and a perfect parry each leave a
+50. a landed blow, a blow absorbed by armour and a perfect parry each leave a
     different mark, the camera is punched, a real drop raises dust while a step
     does not, and none of it accumulates
-53. the options screen opens from the title, a key already taken by another
+51. the options screen opens from the title, a key already taken by another
     action is refused, and a rebind is still there after a restart
-54. an enemy turns to face the player mid-attack, and a stationary one turns
+52. an enemy turns to face the player mid-attack, and a stationary one turns
     at all
-55. every wide platform has a stone face under it, every hole in the floor has
+53. every wide platform has a stone face under it, every hole in the floor has
     a light in it, and the scene has the lighting environment it is read through
-56. an arena cannot be run past: the barrier holds until the arena is cleared
-57. enemies patrol the ground they were placed on, and the room still has its
+54. an arena cannot be run past: the barrier holds until the arena is cleared
+55. enemies patrol the ground they were placed on, and the room still has its
     population ten seconds later
-58. the game exports to a Windows binary whose .NET assemblies are present,
+56. the game exports to a Windows binary whose .NET assemblies are present,
     and that binary starts with its C# autoloads running
-59. the title offers Continue only when there is progress, it resumes the
+57. the title offers Continue only when there is progress, it resumes the
     saved room, and a new run starts over with nothing
-60. the music voice is never starved, its figure moves through more than a
+58. the music voice is never starved, its figure moves through more than a
     couple of pitches, and the boss room does not sound like the corridor
-61. no check from 3 onward printed an engine error while reaching its own PASS
+59. each act has its own recorded atmosphere, the boss takes it and gives it
+    back, and all three room shapes are reached
+60. no check from 3 onward printed an engine error while reaching its own PASS
 
 **One unresolved intermittent.** The engine-quiet check fired on two consecutive gate runs
 immediately after a rebuild, naming engine errors, and has passed on the

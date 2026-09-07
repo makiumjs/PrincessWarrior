@@ -22,16 +22,20 @@ under elevated walkways, and a course of stone under every walkable surface.
 Checkpoints are sculpted stone shrines with floating resonant crystals, and room exits
 are clear monumental stone arches bearing pulsing dimensional vortex portals (sealed
 by a crimson barrier in the boss room until the Warden falls). You control a rigged
-character with a sword, starting with **no abilities**.
+character with a sword and **all four abilities from the first frame**: double
+jump, dash, wall jump, charge attack. The crystals that used to hand them out
+are gone, and so are their HUD icons -- without backtracking a gate is not a
+locked door you return to, it is a chunk quietly made easier until a pickup
+appears.
 
 You run, jump, fight, take damage from spike traps, bank checkpoints, die and
 respawn at the last one. Enemies come in four kinds and each wants a different
 answer: a grunt you walk up to, a sentry that has to be closed on through fire,
 a skirmisher that will not stand and trade, and a warlock that holds its range
-so closing costs you ground it keeps taking back. Ability crystals grant Double
-Jump, Dash, Wall Jump and Charge Attack -- each placed immediately before the
-obstacle that needs it, and spread across rooms 1, 2, 4 and 5. Room 0 grants
-nothing: it is the room that teaches jumping.
+so closing costs you ground it keeps taking back. The first five rooms are built from three
+layouts that ask one verb at a time; the last five draw from three of their own,
+built on chunks that ask for two at once -- a `Chasm` is a dash across into a
+wall climb, a `Rift` is a drop straight into a gap with no runway at the bottom.
 
 **A run is ten rooms of about 200 metres**, twelve minutes or so, and the last
 one is a boss. Arenas along the way seal behind a barrier until they are
@@ -47,7 +51,7 @@ lives. Kill it and the run ends.
 ## What is proven, and by what
 
 
-`bash tools/verify.sh` — 61 checks, currently all green. It exits non-zero on
+`bash tools/verify.sh` — 60 checks, currently all green. It exits non-zero on
 failure and aborts on a build error rather than testing the previous assembly,
 and every check in it has been verified to FAIL correctly, not just to pass.
 

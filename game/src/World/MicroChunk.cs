@@ -15,6 +15,16 @@ public enum ChunkKind
     Chimney,
     /// A single step up onto a ledge.
     StepUp,
+    /// Dash across, then climb out. TWO abilities in one breath, which is the
+    /// thing the first nine kinds never asked for: every one of them teaches a
+    /// verb and then tests that verb alone, so by the room that grants the last
+    /// ability the game has said everything it has to say and can only repeat
+    /// itself with bigger numbers.
+    Chasm,
+    /// A drop straight into a gap, with no runway at the bottom. Nothing else
+    /// here asks the player to keep momentum THROUGH a height change: a Drop is
+    /// free and a DashGap is entered at a walk.
+    Rift,
     /// A single step DOWN. Free to cross -- you fall off it -- and that is the
     /// point: a room made only of ascents climbs out of its own backdrop and
     /// reads as a staircase rather than a place. Added when the rooms were
@@ -104,17 +114,10 @@ public sealed class MicroChunkComposer
 
     /// Where an ability pickup must sit, and which ability it grants: just
     /// before the chunk that cannot be crossed without it. The obstacle then
-    /// teaches its own ability.
-    public IReadOnlyList<(Vector3 Position, string Ability)> AbilityGrants => _grants;
-    private readonly List<(Vector3, string)> _grants = new();
 
     /// Record that the NEXT chunk needs this ability, placing the pickup on the
     /// ground the player is standing on when they meet the obstacle.
-    private void RequireAbility(string ability)
-    {
-        _grants.Add((new Vector3(_cursorX - 1.5f, _cursorY + 1.0f, 0f), ability));
-    }
-
+    
     /// Scales every obstacle in this room. Room 0 must be survivable by a
     /// player with no abilities and no practice: the metric contract proves a
     /// gap is *clearable*, it says nothing about whether meeting it in the
@@ -156,7 +159,6 @@ public sealed class MicroChunkComposer
             case ChunkKind.DashGap:
             {
                 Emit(4f);
-                RequireAbility("Dash");
                 _cursorX += _m.SafeDashGap * intensity;
                 Emit(4f);
                 break;
@@ -193,7 +195,6 @@ public sealed class MicroChunkComposer
             case ChunkKind.Arena:
             {
                 Emit(4f);
-                RequireAbility("ChargeAttack");
                 float width = Mathf.Max(_m.SafeGap * 2f, 10f);
                 float x0 = _cursorX;
                 float centre = _cursorX + width * 0.5f;
@@ -206,7 +207,6 @@ public sealed class MicroChunkComposer
             case ChunkKind.WallShaft:
             {
                 Emit(4f);
-                RequireAbility("WallJump");
 
                 // Gap narrow enough that a wall jump crosses it easily, and
                 // tall enough that a double jump alone cannot clear it — that
@@ -223,9 +223,47 @@ public sealed class MicroChunkComposer
                 Emit(4f);   // landing platform at the top of the shaft
                 break;
             }
+            case ChunkKind.Chasm:
+            {
+                // A DashGap whose far side is a WallShaft. The dash is not
+                // enough on its own and neither is the climb: the launch pad
+                // and the shaft floor are separated by a full dash, and the
+                // shaft is taller than a double jump.
+                //
+                // The shaft floor is emitted before the walls for the same
+                // reason WallShaft does it: walls rise FROM a platform, and a
+                // shaft with no floor is a pit with decoration on the sides.
+                Emit(4f);
+                _cursorX += _m.SafeDashGap * intensity;
+
+                float shaft = Mathf.Max(_m.SafeGap * 0.55f, 2.0f);
+                float climb = _m.MaxDoubleJumpUp * 1.3f * intensity;
+                float baseX = _cursorX, baseY = _cursorY;
+                Emit(shaft);
+                _walls.Add(new WallRect(baseX, baseY, climb));
+                _walls.Add(new WallRect(baseX + shaft, baseY, climb));
+
+                _cursorY += climb;
+                Track(_cursorY);
+                Emit(4f);
+                break;
+            }
+            case ChunkKind.Rift:
+            {
+                // Drop, then dash, with a landing too short to walk up speed on.
+                // The gap is shortened to 0.85 because it is entered from a fall
+                // rather than from a run, and the metric contract sizes
+                // SafeDashGap for a player who is already moving.
+                Emit(4f);
+                float drop = _m.SafeStepUp * 1.4f * intensity;
+                _cursorY = Mathf.Max(_startY, _cursorY - drop);
+                Emit(2.5f);
+                _cursorX += _m.SafeDashGap * 0.85f * intensity;
+                Emit(4f);
+                break;
+            }
             case ChunkKind.Chimney:
             {
-                RequireAbility("DoubleJump");
                 const int steps = 3;
                 float step = Mathf.Clamp(_m.SafeStepUp * intensity, 1.3f, 1.8f);
                 float ledge = 4f;

@@ -13,7 +13,10 @@ public partial class SaveData : Resource
     // rather than left as a promise of persistence the game does not provide.
 
     [Export] public Vector3 PlayerPosition;
-    [Export] public AbilityFlags UnlockedAbilities = AbilityFlags.None;
+    /// Always everything now. Kept in the save rather than removed so a file
+    /// written by an older build still loads, and so the field the HUD and the
+    /// controller read has one home.
+    [Export] public AbilityFlags UnlockedAbilities = AbilityFlags.All;
     [Export] public string LastCheckpointId = "";
 
     /// Run progress. RoomsCleared is the high-water mark, not the current

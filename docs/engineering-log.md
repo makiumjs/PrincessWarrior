@@ -1273,3 +1273,59 @@ ratio, so the control controlled for nothing. A control only controls for what
 it does not share with the thing it is measuring. The bound is an absolute 0.05
 rad/frame, between a measured run cycle at 0.104 and a measured collapse at
 0.023, and it states what the mechanic is for rather than agreeing with itself.
+
+## The second half had nothing new in it, and the fix exposed three checks
+
+The complaint from play was that the level design needed review. The measurement
+behind it: nine chunk kinds, all of them static distances sized from
+`PlayerMetrics`; three layouts dealt by `index % 3`, so room 6 IS room 0; the
+last ability at room 5 and the last gate in `Allowed` at room 4; and difficulty a
+single scalar, `0.5 + 0.07 * index`. After room 5 the game had nothing left to
+say and could only repeat itself louder.
+
+Two kinds were added that ask for two verbs at once -- `Chasm` dashes across a
+gap into a wall climb, `Rift` drops straight into a gap with no runway -- and
+the layouts are now dealt from a bag, with the back half drawing from three of
+its own built on those kinds.
+
+**Then the crystals went entirely**, which is a design call rather than a fix:
+without backtracking a gate is not a locked door you come back to. What it
+bought in practice was a class of bug, and the bug arrived on schedule.
+
+**The bug: a room's crossability depended on which layout came before it.**
+Dealing from a bag put early layout 0 at room 4, and layout 0 had never run
+there. Under `index % 3` it appeared at rooms 0, 3, 6 and 9 -- and at 6 and 9 the
+player already held WallJump from a layout-1 room. At room 4 it did not, and the
+traversal bot ran off the end of the world at 101% of the room, dying and
+respawning in a loop. It crossed the same layout at difficulty 0.71 with zero
+wall jumps and could not recover at 0.78. Layout 0 carries its own shaft now: a
+layout whose crossability depends on what a DIFFERENT layout happened to grant
+is not a layout, it is a coincidence.
+
+**Three checks then failed, and none of them was about the level.**
+
+*The chunk-clearance check was order-dependent.* `Gap` crossed alone in 101
+frames and stalled for 1406 after `StepUp`, deterministically, on identical
+geometry. The per-chunk setup reset the bot's own `_jumpHeld` flags but never
+released the actual buttons, so a chunk that ended mid-jump left `jump` held --
+and `PlayerController` fills its buffer from `IsActionJustPressed`, which an
+already-held button never produces. The bot jumped once in 1400 frames. This is
+the same defect the shaft climb had years of commits ago, one level up, and it
+had been latent until an unrelated change shifted the build by a frame.
+
+*The wall-slide check was measuring a short wall.* It took the FIRST wall over
+three metres and placed the player 2.5m up its face. Shaft height scales with
+room difficulty, and the wall it now found sat in room 0 at difficulty 0.5, so
+2.5m was most of the way to the top: the check measured a free fall past a short
+wall and reported "no wall slide", which was true and was not the defect it was
+written to catch. It takes the tallest wall now and places the player at a
+fraction of its height.
+
+*The Continue check asserted a new run starts with no abilities.* It does not
+any more, and the check would have been vacuous kept as it was. What separates
+the two doors is the room and the cleared count, so that is what it asks.
+
+The general shape is one this project keeps meeting: a check that passes is not
+the same as a check that is asking about the mechanic. Two of these three had
+been quietly measuring something else for as long as the thing they measured
+happened to coincide with the thing they meant.

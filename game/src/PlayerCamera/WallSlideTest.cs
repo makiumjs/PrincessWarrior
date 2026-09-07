@@ -44,9 +44,10 @@ public partial class WallSlideTest : Node
                 GetTree().Quit();
                 return;
             }
-            // Place the player against the wall's right face, high up, so it
-            // falls along the surface.
-            _player.GlobalPosition = _wall.GlobalPosition + new Vector3(0.7f, 2.5f, 0f);
+            // Against the wall's right face, two thirds of the way up, so there
+            // is surface left below to slide along whatever the wall's height.
+            float up = WallHeight(_wall) * 0.33f;
+            _player.GlobalPosition = _wall.GlobalPosition + new Vector3(0.7f, up, 0f);
             _player.Velocity = Vector3.Zero;
             GD.Print($"[SLIDE] placed against wall at {_player.GlobalPosition}");
         }
@@ -99,15 +100,36 @@ public partial class WallSlideTest : Node
         }
     }
 
+    /// The TALLEST wall, not the first one found. Shaft height scales with the
+    /// room's difficulty, so the first wall in an early room can be barely over
+    /// the 3-metre bar this looks for -- and the check then placed the player
+    /// 2.5m up its face, which is most of the way to the top of it. It measured
+    /// a free fall past a short wall and reported "no wall slide", which is
+    /// true and is not the defect it was written to catch.
     private static Node3D FindClimbableWall(Node from)
     {
-        if (from is StaticBody3D b && b.GetChildCount() > 0
-            && b.GetChild(0) is CollisionShape3D cs
-            && cs.Shape is BoxShape3D box && box.Size.Y > 3f && box.Size.X < 1.5f)
-            return b;
-        foreach (var c in from.GetChildren()) { var f = FindClimbableWall(c); if (f != null) return f; }
-        return null;
+        Node3D best = null;
+        float tallest = 0f;
+        void Walk(Node n)
+        {
+            if (n is StaticBody3D b && b.GetChildCount() > 0
+                && b.GetChild(0) is CollisionShape3D cs
+                && cs.Shape is BoxShape3D box && box.Size.Y > 3f && box.Size.X < 1.5f
+                && box.Size.Y > tallest)
+            {
+                tallest = box.Size.Y;
+                best = b;
+            }
+            foreach (var c in n.GetChildren()) Walk(c);
+        }
+        Walk(from);
+        return best;
     }
+
+    /// How tall the wall this check picked actually is, so the player can be
+    /// placed as a FRACTION of it rather than at a fixed 2.5 metres.
+    private static float WallHeight(Node3D wall) =>
+        wall.GetChild(0) is CollisionShape3D cs && cs.Shape is BoxShape3D box ? box.Size.Y : 0f;
 
     private static DungeonRoomBuilder FindRoom(Node from)
     {

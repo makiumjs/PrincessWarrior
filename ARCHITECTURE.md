@@ -372,20 +372,34 @@ hand-guessed distance.
   points and ability grants, sizing everything from the metrics above.
   The kinds and what each one is FOR:
 
-  | Kind | Demands | Grants before it |
-  |---|---|---|
-  | `Gauntlet` | nothing; breathing room, holds an encounter | — |
-  | `Gap` | a running jump | — |
-  | `DashGap` | jump + dash | Dash |
-  | `StepUp` | a single jump up | — |
-  | `Chimney` | repeated jumps up a zig-zag | DoubleJump |
-  | `WallShaft` | wall-sliding up a narrow shaft | WallJump |
-  | `Arena` | a fight, not a traversal | ChargeAttack |
-  | `Spikes` | jumping over a trap on solid ground | — |
-  | `Drop` | nothing; a single step DOWN, free to cross | — |
+  | Kind | Demands |
+  |---|---|
+  | `Gauntlet` | nothing; breathing room, holds an encounter |
+  | `Gap` | a running jump |
+  | `DashGap` | jump + dash |
+  | `StepUp` | a single jump up |
+  | `Chimney` | repeated jumps up a zig-zag |
+  | `WallShaft` | wall-sliding up a narrow shaft |
+  | `Arena` | a fight, not a traversal |
+  | `Spikes` | jumping over a trap on solid ground |
+  | `Drop` | nothing; a single step DOWN, free to cross |
+  | `Chasm` | a dash across, then a wall climb out -- two verbs in one breath |
+  | `Rift` | a drop straight into a gap, with no runway at the bottom |
 
-  Each chunk that needs an ability places the pickup immediately before
-  itself, so the obstacle teaches the ability it gates.
+  **The player owns all four abilities from the first frame**, so a chunk no
+  longer places a pickup and no longer gets downgraded when the player lacks
+  its verb. The crystals and the `Allowed` gate are both gone: without
+  backtracking a gate is not a locked door you return to, it is a chunk quietly
+  made easier until a pickup appears -- and what it bought in practice was a
+  class of bug where a room's crossability depended on which layout had been
+  dealt before it. That bug was not hypothetical: dealing layouts from a bag put
+  early layout 0 at room 4 without the wall jump a layout-1 room used to grant,
+  and the traversal bot fell out of the world at 101% of the room.
+
+  `AbilityFlags.All` is now the player's starting state and `SaveData`'s
+  default. The `AbilityUnlocked` signal stays -- `SaveManager` still replays it
+  on load, and it is how the controller would learn of a grant if one is ever
+  reintroduced.
 - `src/World/DungeonRoomBuilder.cs` — realises each rect as KayKit visual tiles
   plus **one** `BoxShape3D` collider spanning the whole platform, not one per
   tile: adjacent per-tile colliders create seams the player snags on.
@@ -490,9 +504,18 @@ count, none of them feel:
 - **The boss.** `IsBossRoom => RoomIndex == RunLength - 1`, so the last room is
   the Warden and the count has to leave a run in front of it.
 
-Ten rooms over three layouts means layout 0 is seen four times and layouts 1 and
-2 three times each -- repetition the layouts themselves do not yet answer, and
-the largest open item on the level design.
+**Layouts are dealt from a bag, and the second half has its own set.**
+`index % 3` was periodic by construction: over ten rooms it dealt layout 0 four
+times and guaranteed room 6 was room 0 with a steeper ramp, which is the shape
+of "the second half is the first half with bigger numbers". Now each half deals
+every layout once before any repeat, ordered so no two neighbouring rooms share
+one, and the back half draws from three LATE layouts built on the composition
+kinds -- one climbs, one runs, one fights.
+
+The last room is the Warden's and has a shape rather than a number: short, flat
+and wide. Under the late set it drew the climb, and a 35-metre ascent
+immediately before the only boss in a twelve-minute run is a stairwell with a
+fight at the top.
 
 Capping the run risked hollowing out the tests that walk many rooms, which is
 the vacuous-pass class this project has already been bitten by three times.

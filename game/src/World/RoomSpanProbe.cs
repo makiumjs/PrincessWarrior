@@ -42,15 +42,7 @@ public partial class RoomSpanProbe : Node
             }
             if (c is AI.EnemyController) enemies++;
         }
-        var pickups = new System.Collections.Generic.Dictionary<string, int>();
-        foreach (var c in _room.GetChildren())
-            if (c is AbilityPickup ap)
-            {
-                string k = ap.Ability.ToString();
-                pickups[k] = pickups.TryGetValue(k, out int n) ? n + 1 : 1;
-            }
         var parts = new System.Collections.Generic.List<string>();
-        foreach (var kv in pickups) parts.Add($"{kv.Key}x{kv.Value}");
         GD.Print($"[SPAN]   pickups: {(parts.Count > 0 ? string.Join(" ", parts) : "none")}");
 
         var exit = _room.GetNodeOrNull<Node3D>("RoomExit");

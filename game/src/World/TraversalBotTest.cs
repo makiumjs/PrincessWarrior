@@ -430,6 +430,19 @@ public partial class TraversalBotTest : Node
         _climbing = false;
         _jumpHeld = _dashHeld = _attackHeld = false;
 
+        // The FLAGS above are not the button state. Releasing them in code while
+        // the engine still holds jump from the previous chunk means the next
+        // press lands on an already-held button, which produces no edge --
+        // PlayerController fills its jump buffer from IsActionJustPressed, so
+        // the bot then never jumps again.
+        //
+        // This is the same defect the shaft climb once had, one level up, and it
+        // made this check ORDER-DEPENDENT: Gap crossed in 101 frames on its own
+        // and stalled for 1406 after StepUp, on identical geometry. It was
+        // latent until an unrelated change shifted the build by one frame.
+        foreach (var action in new[] { "jump", "dash", "attack_light", "attack_heavy", "parry" })
+            Input.ActionRelease(action);
+
         if (ChunksToTest.Length > 0)
         {
             _room.ChunkUnderTest = ChunksToTest[index];

@@ -3,114 +3,90 @@ using LostCrownlike.Core;
 
 namespace LostCrownlike.World;
 
-/// TEST-SCENE ONLY: the metroidvania invariant, stated as something that can
-/// actually be proven — abilities are OFF at the start, a pickup grants exactly
-/// one, the player's own flags reflect it, and Save persists it.
+/// TEST-SCENE ONLY: the player owns every ability from the first frame, and
+/// nothing in the world hands one out.
 ///
-/// Deliberately does NOT try to show "the ability opened progress": measuring
-/// that with a fixed-cadence bot compares bot quality, not gating. A bot that
-/// dashes on a timer drives itself into pits and travels LESS far with the
-/// ability than without it.
+/// This check used to assert the opposite -- abilities start locked, a crystal
+/// grants one, player and save agree. The crystals are gone: without
+/// backtracking a gate is not a locked door you return to, it is a chunk
+/// silently downgraded to an easier one until the pickup appears, and what it
+/// bought in practice was a class of bug where a room's crossability depended
+/// on which layout happened to be dealt before it.
+///
+/// So the question is inverted, and it is the one this project keeps asking in
+/// the other direction: is everything DECLARED also real? Here, is everything
+/// removed actually gone? A pickup still spawning somewhere in room seven would
+/// be invisible -- it would grant what the player already has and read as
+/// scenery -- which is exactly how dead systems survived here twice before.
 public partial class GatingTest : Node
 {
-    private int _f;
+    private int _f, _room;
     private Node3D _player;
-    private DungeonRoomBuilder _room;
-    private AbilityFlags _granted;
-    private bool _sawGrant;
+    private DungeonRoomBuilder _rooms;
+    private int _pickupsSeen;
+    private AbilityFlags _atStart = AbilityFlags.None;
 
-    public override void _Ready()
-    {
-        EventBus.Instance.AbilityUnlocked += bits =>
-        {
-            _granted = (AbilityFlags)bits;
-            _sawGrant = true;
-            GD.Print($"[GATE] pickup granted {_granted} at frame {_f}");
-        };
-    }
+    public override void _Ready() =>
+        DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath("user://save.cfg"));
 
     public override void _Process(double delta)
     {
         _f++;
         _player ??= GetTree().GetFirstNodeInGroup("player") as Node3D;
-        _room ??= FindRoom(GetTree().Root);
-        if (_player == null || _room == null || _room.IsRebuilding) return;
-
-        // Its own clean slate. "Starts locked" is a claim about a fresh run,
-        // and SaveManager restores whatever the previous check in the suite
-        // left on disk -- so this depended on being the fourth check rather
-        // than on the game being right.
-        if (_f == 3)
+        _rooms ??= FindFirst<DungeonRoomBuilder>(GetTree().Root);
+        if (_player == null || _rooms == null)
         {
-            Save.SaveManager.Instance?.ResetSave();
-            if (_player is PlayerCamera.PlayerController p) p.ResetForNewRun();
+            if (_f > 120) Done(false, "no player, or no room builder");
+            return;
+        }
+        if (_rooms.IsRebuilding) return;
+
+        if (_atStart == AbilityFlags.None)
+            _atStart = (AbilityFlags)(int)_player.Get("UnlockedAbilities");
+
+        // Every room, not one: a spawner that fires in a single late layout is
+        // precisely what a one-room check would miss.
+        _pickupsSeen += CountPickups(_rooms);
+        if (_room + 1 < _rooms.RunLength)
+        {
+            _room++;
+            _rooms.RebuildAs(_room);
             return;
         }
 
-        if (_f == 5)
-        {
-            var start = (AbilityFlags)(int)_player.Get("UnlockedAbilities");
-            GD.Print($"[GATE] starting abilities = {start}");
-            if (start != AbilityFlags.None)
-            {
-                GD.Print("[GATE] RESULT: FAIL (player did not start with abilities locked)");
-                GetTree().Quit();
-                return;
-            }
-            // Room 0 has no crystal in it any more -- it is the room that
-            // teaches jumping -- and this used to walk right in whichever room
-            // happened to be built. Asked, not remembered.
-            _room.RebuildAs(_room.FirstRoomWithAbilityPickup());
-            return;
-        }
+        var save = Save.SaveManager.Instance?.Current;
+        var saved = save?.UnlockedAbilities ?? AbilityFlags.None;
 
-        // Put the player just short of the first crystal and walk into it.
-        // Walking the whole room to reach one is a traversal test, and there
-        // is one of those; what this owns is what happens when the crystal is
-        // touched.
-        if (_f == 30)
-        {
-            var pickup = FirstPickup(_room);
-            if (pickup == null)
-            {
-                GD.Print("[GATE] RESULT: FAIL (no ability pickup anywhere in the first room that should have one)");
-                GetTree().Quit();
-                return;
-            }
-            _player.GlobalPosition = pickup.GlobalPosition + new Vector3(-3.5f, 0.4f, 0f);
-            GD.Print($"[GATE] walking into a {pickup.Ability} crystal at x={pickup.GlobalPosition.X:F1}");
-            Input.ActionPress("move_right");
-            return;
-        }
+        GD.Print($"[GATING] player starts with: {_atStart}");
+        GD.Print($"[GATING] the save agrees: {saved}");
+        GD.Print($"[GATING] ability pickups found across {_rooms.RunLength} rooms: {_pickupsSeen}");
 
-        if (_f == 300)
-        {
-            var now = (AbilityFlags)(int)_player.Get("UnlockedAbilities");
-            var saved = Save.SaveManager.Instance?.Current?.UnlockedAbilities ?? AbilityFlags.None;
-            GD.Print($"[GATE] granted={_granted} playerFlags={now} savedFlags={saved}");
-
-            bool ok = _sawGrant
-                   && now.HasFlag(_granted)
-                   && saved.HasFlag(_granted);
-            GD.Print(ok
-                ? "[GATE] RESULT: PASS (locked at start, pickup grants, player and save agree)"
-                : "[GATE] RESULT: FAIL");
-            Input.ActionRelease("move_right");
-            GetTree().Quit();
-        }
+        bool ok = _atStart == AbilityFlags.All
+               && saved == AbilityFlags.All
+               && _pickupsSeen == 0;
+        Done(ok, ok ? "every ability from the first frame, and nothing hands one out" : "");
     }
 
-    private static AbilityPickup FirstPickup(Node from)
+    /// By class NAME, so this keeps meaning something after AbilityPickup is
+    /// deleted: a check that stops compiling when the thing it forbids is
+    /// removed cannot then notice the thing coming back.
+    private static int CountPickups(Node from)
     {
-        if (from is AbilityPickup p) return p;
-        foreach (var c in from.GetChildren()) { var f = FirstPickup(c); if (f != null) return f; }
-        return null;
+        int n = from.GetType().Name.Contains("AbilityPickup") ? 1 : 0;
+        foreach (var c in from.GetChildren()) n += CountPickups(c);
+        return n;
     }
 
-    private static DungeonRoomBuilder FindRoom(Node from)
+    private void Done(bool ok, string why)
     {
-        if (from is DungeonRoomBuilder b) return b;
-        foreach (var c in from.GetChildren()) { var f = FindRoom(c); if (f != null) return f; }
+        GD.Print(ok ? $"[GATING] RESULT: PASS ({why})" : "[GATING] RESULT: FAIL");
+        GetTree().Quit();
+    }
+
+    private static T FindFirst<T>(Node from) where T : Node
+    {
+        if (from is T t) return t;
+        foreach (var c in from.GetChildren()) { var f = FindFirst<T>(c); if (f != null) return f; }
         return null;
     }
 }

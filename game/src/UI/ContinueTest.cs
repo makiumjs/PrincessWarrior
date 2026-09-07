@@ -40,7 +40,7 @@ public partial class ContinueTest : Node
     private bool _shownWithSave;
     private int _resumeAfterContinue = -1;
     private int _resumeAfterNewRun = -1;
-    private AbilityFlags _abilitiesAfterNewRun = AbilityFlags.Dash;
+    private AbilityFlags _abilitiesAfterNewRun = AbilityFlags.None;
 
     public override void _Ready()
     {
@@ -127,7 +127,11 @@ public partial class ContinueTest : Node
                    && _shownWithSave                             // progress, so it is offered
                    && _resumeAfterContinue == SavedRoom          // and it resumes where the run got to
                    && _resumeAfterNewRun == 0                    // New run starts at the beginning
-                   && _abilitiesAfterNewRun == AbilityFlags.None;  // with nothing in hand
+                   // Abilities are no longer what separates the two doors: the
+                   // player owns all four from the first frame, so a new run is
+                   // new by starting at room 0 with nothing CLEARED, and the
+                   // check would be vacuous if it kept asking about crystals.
+                   && _abilitiesAfterNewRun == AbilityFlags.All;
 
             Done(ok, ok ? "Continue resumes the saved room, New run starts over with nothing" : "");
         }
