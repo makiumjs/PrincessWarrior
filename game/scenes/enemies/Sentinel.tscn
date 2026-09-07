@@ -1,0 +1,31 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/AI/Sentinel.cs" id="1_script"]
+[ext_resource type="Script" path="res://src/AI/EnemyVisual.cs" id="2_visual"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/Bolt.tscn" id="3_bolt"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
+radius = 0.55
+height = 2.2
+
+[node name="Sentinel" type="CharacterBody3D"]
+script = ExtResource("1_script")
+VisualRootPath = NodePath("VisualRoot")
+BoltScene = ExtResource("3_bolt")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
+shape = SubResource("CapsuleShape3D_1")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+transform = Transform3D(1.35, 0, 0, 0, 1.35, 0, 0, 0, 1.35, 0, 0, 0)
+
+[node name="Visual" type="Node3D" parent="VisualRoot"]
+script = ExtResource("2_visual")
+CharacterScene = "res://assets/kaykit/characters/Knight.glb"
+WeaponScene = "res://assets/kaykit/props/axe_1handed.gltf"
+OffhandScene = "res://assets/kaykit/props/shield_round.gltf"
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.2
+target_desired_distance = 0.3

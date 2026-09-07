@@ -58,6 +58,15 @@ public partial class EnemyMixTest : Node
 
         if (_f % StepFrames == 0 && _f / StepFrames <= _room.RunLength && _room.RoomIndex < _room.RunLength - 1)
         {
+            // The halfway room seals behind the Sentinel, and this check walks
+            // the run by teleporting onto exits -- so it parked there and
+            // surveyed six rooms instead of nine, leaving the second half with
+            // one sample. Freeing the sealed fight rather than winning it, the
+            // same way the traversal bot does: whether a door holds is check
+            // 60's question, and answering it twice in two places is how a
+            // suite ends up with two truths about one mechanic.
+            foreach (var n in GetTree().GetNodesInGroup("boss")) n.QueueFree();
+
             var exit = _room.GetNodeOrNull<Node3D>("RoomExit");
             if (exit != null) _player.GlobalPosition = exit.GlobalPosition;
         }
@@ -116,15 +125,19 @@ public partial class EnemyMixTest : Node
             // Does the run get heavier, or does it just get longer? The ramp
             // scaled obstacle SIZE and nothing else, so a ten-room run read
             // 4, 5, 8, 4, 5, 8, 4, 5, 8 enemies -- the layout cycle repeating.
-            // The boss room is left out of both halves: it holds one enemy by
-            // design, and counting it would make a heavier back half look
-            // lighter.
+            // BOTH sealed fights are left out of both halves: each holds one
+            // enemy by design, and counting them would make a heavier back half
+            // look lighter. The halfway room joined the boss room in that class
+            // when the Sentinel went in, and this check found it -- the second
+            // half's average fell to 2.5 the moment a room of nine enemies
+            // became a room of one.
             int front = 0, back = 0, frontRooms = 0, backRooms = 0;
             int last = _room.RunLength - 1;
+            int halfway = _room.RunLength / 2;
             for (int i = 0; i < _roomsVisited.Count && i < _enemiesPerRoom.Count; i++)
             {
                 int index = _roomsVisited[i];
-                if (index == last) continue;
+                if (index == last || index == halfway) continue;
                 if (index < _room.RunLength / 2) { front += _enemiesPerRoom[i]; frontRooms++; }
                 else { back += _enemiesPerRoom[i]; backRooms++; }
             }

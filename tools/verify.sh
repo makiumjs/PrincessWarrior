@@ -14,7 +14,7 @@ fail() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; FAILED=1; }
 
 step() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
-step "1/60  Build"
+step "1/61  Build"
 BUILD="$(cd "$GAME" && dotnet build 2>&1)"
 if grep -qE "^\s+Errori: 0|^\s+Error\(s\): 0" <<<"$BUILD" || ! grep -qE "error CS" <<<"$BUILD"; then
   WARN="$(grep -oE '(Avvisi|Warning\(s\)): [0-9]+' <<<"$BUILD" | head -1)"
@@ -31,7 +31,7 @@ else
   exit 1
 fi
 
-step "2/60  Boot"
+step "2/61  Boot"
 # Plain --headless is correct here: this only checks that the project loads and
 # autoloads run, with no rendering involved.
 # Two runs, not one: the configured boot scene is now the title, so a single
@@ -69,14 +69,14 @@ collect_errors() {
   } >> "$ROOT/tools/.engine-errors.log"
 }
 
-step "3/60  Save round-trip and respawn"
+step "3/61  Save round-trip and respawn"
 rm -f "$APPDATA/Godot/app_userdata/LostCrownlike/savegame.tres" 2>/dev/null
 OUT="$(timeout 90 "$GODOT" --headless --path "$GAME" scenes/RespawnTestScene.tscn 2>&1)"
 collect_errors "RespawnTestScene" "$OUT"
 grep -q "RESULT: PASS" <<<"$OUT" && pass "position persists to disk and is restored" \
                                 || { fail "save/respawn"; grep -E "\[RT\]" <<<"$OUT" | tail -3; }
 
-step "4/60  Combat lands its hits"
+step "4/61  Combat lands its hits"
 # Windowed on purpose: --headless has no renderer, so the capture harness this
 # uses cannot grab frames there. See README.
 rm -rf "$GAME/docs/critic-captures/_verify"
@@ -107,11 +107,11 @@ run_scene_test() {
   fi
 }
 
-step "5/60  Full game loop"
+step "5/61  Full game loop"
 run_scene_test "checkpoint -> death -> respawn" scenes/tests/GameLoop.tscn LOOP \
   "player respawns at the checkpoint that was current when it died"
 
-step "6/60  Every ability from the first frame"
+step "6/61  Every ability from the first frame"
 # Inverted, along with the design. The crystals are gone: without backtracking a
 # gate is not a locked door you return to, it is a chunk quietly downgraded to an
 # easier one until the pickup appears -- and what it bought in practice was a
@@ -122,19 +122,19 @@ step "6/60  Every ability from the first frame"
 # reading as scenery, which is how a dead system survived here twice.
 run_scene_test "all abilities, no pickups" scenes/tests/Gating.tscn GATING   "the player starts with every ability and no room hands one out" "--fixed-fps 60"
 
-step "7/60  Enemies respect ledges"
+step "7/61  Enemies respect ledges"
 run_scene_test "enemies stay on their platforms" scenes/tests/Ledge.tscn LEDGE \
   "no enemy fell into a generated gap"
 
-step "8/60  Enemies can hurt the player"
+step "8/61  Enemies can hurt the player"
 run_scene_test "enemy lands a hit" scenes/tests/EnemyDamage.tscn ENEMYDMG \
   "combat is bidirectional, not one-sided"
 
-step "9/60  Death with no checkpoint banked"
+step "9/61  Death with no checkpoint banked"
 run_scene_test "recovers with no checkpoint" scenes/tests/NoCheckpointDeath.tscn NOCP \
   "dying before any checkpoint does not softlock the run"
 
-step "10/60  Corrupt save file"
+step "10/61  Corrupt save file"
 # A save can be truncated by a crash or a full disk. The game must start, not
 # refuse to boot, and must not destroy the damaged file silently.
 SAVE_DIR="$APPDATA/Godot/app_userdata/LostCrownlike"
@@ -149,32 +149,32 @@ else
 fi
 rm -f "$SAVE_DIR/savegame.tres" 2>/dev/null
 
-step "11/60  Pause actually pauses"
+step "11/61  Pause actually pauses"
 run_scene_test "pause stops and resumes the world" scenes/tests/Pause.tscn PAUSE \
   "the world stops while paused and resumes after"
 
-step "12/60  Progression survives a room change"
+step "12/61  Progression survives a room change"
 run_scene_test "abilities and health cross the door" scenes/tests/Progression.tscn PROG \
   "abilities, health and save survive the room rebuild"
 
-step "13/60  No node leak across many room changes"
+step "13/61  No node leak across many room changes"
 # A leak here would only show over a long session; 12 rebuilds in one run makes
 # it visible in seconds.
 run_scene_test "repeated rebuilds do not accumulate nodes" scenes/tests/RoomChurn.tscn CHURN \
   "node count stays stable across 12 room rebuilds"
 
-step "14/60  Wall jump is real content"
+step "14/61  Wall jump is real content"
 # It was implemented, flagged and shown in the HUD while nothing granted it and
 # no surface in the game could be slid on.
 run_scene_test "wall jump is granted and usable" scenes/tests/WallJump.tscn WALLJUMP \
   "a room grants WallJump and provides walls to use it on"
 
-step "15/60  Charge attack is a mechanic, not a flag"
+step "15/61  Charge attack is a mechanic, not a flag"
 # It shipped as an AbilityFlags value with a HUD icon and no behaviour at all.
 run_scene_test "held heavy hits harder than a tap" scenes/tests/ChargeAttack.tscn CHARGE \
   "holding heavy deals more damage than tapping it" "--fixed-fps 60"
 
-step "16/60  Environmental hazards exist"
+step "16/61  Environmental hazards exist"
 # PhysicsLayers.Hazard was declared from the start with nothing ever on it, so
 # the whole category of environmental danger lived only in an enum.
 # Extended when the level got its first MOVING obstacle. Everything before it was
@@ -196,77 +196,77 @@ step "16/60  Environmental hazards exist"
 run_scene_test "traps damage, and one of them moves" scenes/tests/Hazard.tscn HAZARD \
   "a spike trap damages on a repeating cooldown, and a blade sweeps its corridor"
 
-step "17/60  Save survives a long session"
+step "17/61  Save survives a long session"
 # Every death and checkpoint rewrites the file. This compresses 20 room
 # changes, 20 deaths and 21 writes into a few seconds and checks the result on
 # disk still matches memory.
 run_scene_test "save stays coherent over many writes" scenes/tests/LongSession.tscn LONG \
   "save still loadable and matching after 20 rooms and 20 deaths"
 
-step "18/60  State machine survives input mashing"
+step "18/61  State machine survives input mashing"
 # 1500 frames of random press/release on every action, with all abilities
 # granted so the fuzz can actually reach the airborne and dash states.
 run_scene_test "no degenerate state under mashing" scenes/tests/InputMash.tscn MASH \
   "no stuck state, impossible health, NaN position or runaway speed" "--fixed-fps 60"
 
-step "19/60  Wall slide, the state mashing cannot reach"
+step "19/61  Wall slide, the state mashing cannot reach"
 # Needs airborne + touching a wall + holding INTO it + NOT jumping, which random
 # input breaks within a frame or two. Deliberate rather than fuzzed.
 run_scene_test "wall slide clamps the fall" scenes/tests/WallSlide.tscn SLIDE \
   "the state is entered and the fall is clamped, not just falling beside a wall"
 
-step "20/60  Combo window escalates and lapses"
+step "20/61  Combo window escalates and lapses"
 # Both directions. A combo that never resets is not a combo, and it would look
 # correct in any single fight.
 run_scene_test "combo escalates then resets" scenes/tests/ComboWindow.tscn COMBO \
   "chaining raises damage; letting the window lapse drops it back to base"
 
-step "21/60  Sounds are actually distinguishable"
+step "21/61  Sounds are actually distinguishable"
 # Nobody can listen here, so each generated buffer is characterised by length,
 # spectral centroid and noisiness, and every pair must differ on at least one.
 run_scene_test "no two sounds are perceptually identical" scenes/tests/SoundSeparation.tscn SOUND \
   "all 7 sounds differ in length, brightness or noisiness"
 
-step "22/60  Falling out of the level kills and recovers"
+step "22/61  Falling out of the level kills and recovers"
 # Found by mutation testing: disabling FallDeathY left every other check green,
 # because the loop test forces death with direct damage and never falls.
 run_scene_test "fall death works" scenes/tests/FallDeath.tscn FALL \
   "falling into empty space kills the player and the run resumes"
 
-step "23/60  Coyote time"
+step "23/61  Coyote time"
 # Found by mutation testing: zeroing CoyoteTimeWindow broke no check at all.
 # Pure game feel, and it had no coverage whatsoever.
 run_scene_test "jump still fires just after a ledge" scenes/tests/CoyoteTime.tscn COYOTE \
   "a jump pressed inside the grace window after leaving a ledge still fires" "--fixed-fps 60"
 
-step "24/60  Dash invulnerability"
+step "24/61  Dash invulnerability"
 # Found by mutation testing: zeroing DashIFrameDuration broke no check at all.
 # Dashing through an attack is a defensive option; losing it silently changes
 # how every fight is played.
 run_scene_test "immune while dashing, vulnerable after" scenes/tests/DashIFrame.tscn IFRAME \
   "a hit landed mid-dash is ignored, the same hit later is not" "--fixed-fps 60"
 
-step "25/60  Camera follows the player"
+step "25/61  Camera follows the player"
 # Found by mutation testing: freezing the camera broke no check at all — and a
 # camera that did not follow was a real defect here once, caught by a human
 # looking at screenshots.
 run_scene_test "camera tracks and frames the player" scenes/tests/CameraFollow.tscn CAMERA \
   "the camera moves with the player and keeps it framed" "--fixed-fps 60"
 
-step "26/60  Checkpoints do not re-announce"
+step "26/61  Checkpoints do not re-announce"
 # Also uncovered. It matters twice: the HUD prompt sticks on screen, and Save
 # rewrites the file to disk on every re-entry.
 run_scene_test "re-entering a checkpoint is quiet" scenes/tests/CheckpointDedup.tscn DEDUP \
   "leaving and re-entering the same checkpoint announces it once" "--fixed-fps 60"
 
-step "27/60  Enemies that fall out are removed"
+step "27/61  Enemies that fall out are removed"
 # Uncovered until mutation testing: a chasing enemy follows the player off a
 # ledge by design, so without this every pursuit into a pit leaves a live body
 # falling forever under the map.
 run_scene_test "fallen enemies are cleaned up" scenes/tests/EnemyFallDeath.tscn ENEMYFALL \
   "an enemy dropped into the void is removed, not left falling" "--fixed-fps 60"
 
-step "28/60  Nothing leaves the movement plane"
+step "28/61  Nothing leaves the movement plane"
 # The premise the whole game rests on, and mutation testing found it entirely
 # unverified. Note it guards the PROPERTY, not one mechanism: the engine axis
 # lock and the manual clamp are independent defences, and removing either alone
@@ -274,7 +274,7 @@ step "28/60  Nothing leaves the movement plane"
 run_scene_test "player and enemies stay on X/Y" scenes/tests/PlaneLock.tscn PLANE \
   "under movement, jumps, dashes and attacks, nothing drifts off the plane" "--fixed-fps 60"
 
-step "29/60  The run has an ending"
+step "29/61  The run has an ending"
 # The three room layouts cycled on index % 3 forever, so there was no last
 # room and no win state. End to end on purpose: the failures worth catching are
 # that the run never terminates, terminates twice, or keeps rebuilding
@@ -283,7 +283,7 @@ step "29/60  The run has an ending"
 # turned the check red.
 run_scene_test "the run ends and is recorded" scenes/tests/RunArc.tscn ARC   "six rooms, one ending, and the save records it" "--fixed-fps 60"
 
-step "30/60  Ranged enemies"
+step "30/61  Ranged enemies"
 # The second enemy type, and the first that cannot be answered by walking up
 # and trading hits. Three claims, because they fail separately: the sentry is
 # actually placed by the generator, its bolt damages at range, and a bolt that
@@ -292,7 +292,7 @@ step "30/60  Ranged enemies"
 # impact, so deleting the timeout entirely left the check green.
 run_scene_test "ranged enemy and its projectile" scenes/tests/Sentry.tscn SENTRY   "sentries are placed, hurt at range, and leave no bolts behind" "--fixed-fps 60"
 
-step "31/60  Enemies can be told apart by behaviour"
+step "31/61  Enemies can be told apart by behaviour"
 # EnemyController's steering was private, so a subclass could close or stand
 # still but never back away -- CrossbowSentry had to be written immobile for
 # that reason. The ChaseSteering hook fixes it, and Skirmisher is its consumer:
@@ -303,7 +303,7 @@ step "31/60  Enemies can be told apart by behaviour"
 # position AT the strike, not the live distance between the two.
 run_scene_test "enemies behave differently from each other" scenes/tests/Skirmisher.tscn SKIRM   "one type retreats after striking, one holds a stand-off, and the default closes" "--fixed-fps 60"
 
-step "32/60  The three enemy types across a whole run"
+step "32/61  The three enemy types across a whole run"
 # Each type has its own check and each passes alone; that is a different claim
 # from this one. The type cycle is a property of the RUN, and it has been wrong
 # twice in ways no single-room test could see -- shifted by the skipped spawn
@@ -315,7 +315,7 @@ step "32/60  The three enemy types across a whole run"
 # sentry can actually see it.
 run_scene_test "three enemy types across a run" scenes/tests/EnemyMix.tscn MIX   "every room populated, all three types appear, and a live bolt survives nothing" "--fixed-fps 60"
 
-step "33/60  Enemies are a threat, and the opening is survivable"
+step "33/61  Enemies are a threat, and the opening is survivable"
 # A two-sided bound on a player who never hits back: enemies that cannot hurt a
 # stationary player are decoration, and an opening room that kills one in four
 # seconds is not an opening room. It runs the exposure twice at the same
@@ -325,7 +325,7 @@ step "33/60  Enemies are a threat, and the opening is survivable"
 # a sentry or skirmisher tuned to zero would have gone unnoticed.
 run_scene_test "enemies threaten a passive player" scenes/tests/ThreatBudget.tscn THREAT   "damage attributable to enemies is real, and room 0 does not kill a passive player" "--fixed-fps 60"
 
-step "34/60  The whole run can actually be played"
+step "34/61  The whole run can actually be played"
 # Every other check in this suite teleports the player. That makes them honest
 # about what they test and silent about the one thing a platformer has to get
 # right: the Spatial Metric Contract claims every chunk is sized for the
@@ -344,7 +344,7 @@ step "34/60  The whole run can actually be played"
 # rooms that do, fail.
 run_scene_test "a bot plays the whole run" scenes/tests/FullRunBot.tscn BOT   "every room of a full run is traversable with the abilities it grants" "--fixed-fps 60"
 
-step "35/60  Wall jumps actually climb"
+step "35/61  Wall jumps actually climb"
 # Split out from the bot on purpose: a bot that cannot climb proves nothing
 # about whether a shaft is climbable. This builds two walls at exactly the
 # dimensions MicroChunk computes and drives the controller's own stated
@@ -360,7 +360,7 @@ step "35/60  Wall jumps actually climb"
 # clearable and the bot's shortfall in those rooms is its own.
 run_scene_test "wall jumps gain height" scenes/tests/WallShaftClimb.tscn SHAFT   "a shaft of the size the generator builds can be climbed" "--fixed-fps 60"
 
-step "36/60  Individual chunks at full difficulty"
+step "36/61  Individual chunks at full difficulty"
 # A whole room is too coarse to tell "the bot is not good enough" from "this
 # chunk is unclearable", so each chunk is built alone, flanked by flat ground,
 # at intensity 1.0.
@@ -378,7 +378,7 @@ step "36/60  Individual chunks at full difficulty"
 # chunk is clearable with what it grants, and it is.
 run_scene_test "each chunk clears at full difficulty" scenes/tests/ChunkClearance.tscn BOT   "all eight chunk kinds are clearable alone at intensity 1.0" "--fixed-fps 60"
 
-step "37/60  Continuing animations loop"
+step "37/61  Continuing animations loop"
 # Reported from play, missed by every check here: after 0.80s of Running_A the
 # model froze in its last pose and the character appeared to slide. Every
 # KayKit GLB imports with LoopMode.None, and nothing had ever looked at an
@@ -388,7 +388,7 @@ step "37/60  Continuing animations loop"
 # in both directions: looping a one-shot like Jump_Start would be its own bug.
 run_scene_test "clips that should loop, loop" scenes/tests/AnimationLoop.tscn ANIM   "continuing clips loop on player and enemies; one-shots do not" "--fixed-fps 60"
 
-step "38/60  Finishing the run leads somewhere"
+step "38/61  Finishing the run leads somewhere"
 # Also reported from play. The arc shipped with an ending that was a dead end:
 # the last exit emitted RunCompleted, a banner appeared, and nothing else
 # happened -- no restart, no menu, no way forward. Asserts the whole loop,
@@ -396,7 +396,7 @@ step "38/60  Finishing the run leads somewhere"
 # progression is wiped, and the save on disk stops claiming the run is done.
 run_scene_test "a finished run can be restarted" scenes/tests/RunRestart.tscn RESTART   "the ending is reachable and leads back to a fresh run" "--fixed-fps 60"
 
-step "39/60  Every checkpoint stands on ground"
+step "39/61  Every checkpoint stands on ground"
 # From a play session in room 5 that collected all three abilities and fought
 # all three enemy types, yet banked only the checkpoint at the spawn. A
 # checkpoint that cannot be touched sends every death back to the start of the
@@ -407,7 +407,7 @@ step "39/60  Every checkpoint stands on ground"
 # to keep it that way, not because it found the fault.
 run_scene_test "checkpoints have floor under them" scenes/tests/CheckpointReach.tscn CP   "every checkpoint in the hardest room stands on ground" "--fixed-fps 60"
 
-step "40/60  The model is still moving seconds later"
+step "40/61  The model is still moving seconds later"
 # Check 40 asserts LoopMode is set, which is the FIX, not the symptom -- and a
 # check written against the fix cannot catch the next way this breaks: a clip
 # that loops but is never advanced, a paused AnimationPlayer, a state machine
@@ -434,7 +434,7 @@ step "40/60  The model is still moving seconds later"
 # measured run cycle at 0.104 and a measured collapse at 0.023.
 run_scene_test "the run animation keeps advancing" scenes/tests/AnimationMotion.tscn MOTION   "the model still animates three seconds in, and the legs keep running through a swing" "--fixed-fps 60"
 
-step "41/60  Attacks can be seen coming"
+step "41/61  Attacks can be seen coming"
 # The prerequisite for a parry, and worth having on its own. Every enemy used to
 # wind up with no distinct pose: EnemyState.Attack mapped to the same Throw clip
 # for all three types, and the free KayKit pack has no melee swing to map
@@ -449,7 +449,7 @@ step "41/60  Attacks can be seen coming"
 # applied. Measured: 1.40s of wind-up, 60 degrees of arm, glow 3.33.
 run_scene_test "attacks telegraph before they land" scenes/tests/AttackTell.tscn TELL   "the arm draws back and the weapon lights up before a blow" "--fixed-fps 60"
 
-step "42/60  Parry, and perfect parry"
+step "42/61  Parry, and perfect parry"
 # Four claims, each able to fail alone: an unguarded blow hurts (the baseline,
 # without which the rest could pass on an enemy that never connects), a guard
 # raised in time stops the damage, a guard raised too late still stops it but
@@ -461,7 +461,7 @@ step "42/60  Parry, and perfect parry"
 # game's. Measured: 3 hits unguarded, 0 late, 0 perfect, stagger only on perfect.
 run_scene_test "a parry turns a blow, a perfect one punishes" scenes/tests/Parry.tscn PARRY   "guarding stops the blow; only the perfect window staggers the attacker" "--fixed-fps 60"
 
-step "43/60  The dead are cleaned up"
+step "43/61  The dead are cleaned up"
 # Die() deliberately leaves the body in the scene so the death animation can
 # play and the corpse can slide to a stop -- and nothing freed it afterwards. A
 # room is not rebuilt while you are fighting in it, so bodies simply piled up:
@@ -469,7 +469,7 @@ step "43/60  The dead are cleaned up"
 # it because it counts nodes ACROSS rebuilds, and a rebuild frees everything.
 run_scene_test "bodies do not pile up" scenes/tests/Corpse.tscn CORPSE   "corpses linger long enough to read, then sink and are freed" "--fixed-fps 60"
 
-step "44/60  The voice pool recycles"
+step "44/61  The voice pool recycles"
 # The pool promises to spread across voices "without ever cutting off a
 # still-sounding one", stealing only when a burst genuinely outruns it. That
 # promise was void: AudioStreamPlayer.Playing never goes false for an
@@ -486,7 +486,7 @@ step "44/60  The voice pool recycles"
 # steals is one that drops sounds.
 run_scene_test "voices are reused, not stolen" scenes/tests/VoicePool.tscn VOICE   "spaced sounds never cut a voice off; a real burst still steals" "--fixed-fps 60"
 
-step "45/60  A long run WITH A RENDERER stays quiet"
+step "45/61  A long run WITH A RENDERER stays quiet"
 # The gap this closes is structural, and it took a bug to find it. Almost every
 # check here is --headless, which has no renderer -- so the skeleton, the
 # animation player and everything drawn are barely exercised. That is exactly
@@ -508,7 +508,7 @@ RENDER_ERRS="$(grep -cE "^ERROR:|^SCRIPT ERROR:" <<<"$OUT")"
 [ "$RENDER_ERRS" -eq 0 ] && pass "4600 frames of real play with a renderer, no engine errors"                          || fail "$RENDER_ERRS engine errors in a rendered run"
 rm -rf "$GAME/docs/critic-captures/_render"
 
-step "46/60  The dungeon is not silent"
+step "46/61  The dungeon is not silent"
 # Between hits the game made no sound at all, which reads as being switched off
 # rather than as quiet. The bed is a drone pushed in chunks as its buffer
 # drains, so the failure mode is not silence but "two seconds and then nothing"
@@ -522,7 +522,7 @@ step "46/60  The dungeon is not silent"
 # never-released-voice bug did.
 run_scene_test "ambience runs without starving the pool" scenes/tests/Ambience.tscn AMB   "the bed runs continuously on its own voice, refilling as it drains" "--fixed-fps 60"
 
-step "47/60  The pause menu is in the game"
+step "47/61  The pause menu is in the game"
 # A PauseMenu with Resume and Quit existed for a long time and appeared only in
 # a UI test scene -- it was never added to Main.tscn. So in the actual game the
 # pause key froze the world and showed nothing, with no way out but pressing it
@@ -537,7 +537,7 @@ step "47/60  The pause menu is in the game"
 # instead of failing.
 run_scene_test "pause menu reaches the player" scenes/tests/PauseInGame.tscn PAUSEUI   "the pause menu shows, resumes cleanly, and its restart starts the run over" "--fixed-fps 60"
 
-step "48/60  The game boots into a title"
+step "48/61  The game boots into a title"
 # The scene path this check uses is read from ProjectSettings at runtime, not
 # typed into the test. That is the whole check: a title screen that exists and
 # looks right but is not what run/main_scene points at is invisible to the
@@ -547,7 +547,7 @@ step "48/60  The game boots into a title"
 # place that shows.
 run_scene_test "the title is the boot scene" scenes/tests/TitleBoot.tscn TITLE   "the game boots into a title with no world behind it, and Play starts the run" "--fixed-fps 60"
 
-step "49/60  The last room is a boss fight"
+step "49/61  The last room is a boss fight"
 # Not "there is a big enemy at the end": the RULE is what is checked. Armoured,
 # a 55-damage heavy is reduced to 2 and does not interrupt; parried open, the
 # same blow lands in full; and the exit does not work while it lives. With the
@@ -555,7 +555,7 @@ step "49/60  The last room is a boss fight"
 # only thing that separates the boss from a grunt with a lot of health.
 run_scene_test "the boss gates the ending" scenes/tests/BossFight.tscn BOSS   "armoured until a perfect parry opens it, and the way out is behind it" "--fixed-fps 60"
 
-step "50/60  Blows leave a mark, and absorbed ones look different"
+step "50/61  Blows leave a mark, and absorbed ones look different"
 # Headless on purpose. Not "do pixels appear" -- the windowed check covers the
 # drawn layer -- but "does the spawn happen on every path that claims it", and
 # "does a burst free itself". Both are counts. The colours are asserted to
@@ -566,7 +566,7 @@ step "50/60  Blows leave a mark, and absorbed ones look different"
 # gone in under a frame.
 run_scene_test "impacts are visible and do not linger" scenes/tests/ImpactFx.tscn FX   "a landed blow, an absorbed one and a perfect parry each read differently, and none accumulate" "--fixed-fps 60"
 
-step "51/60  Keys can be rebound, and one key means one action"
+step "51/61  Keys can be rebound, and one key means one action"
 # Reachability is asserted first and on purpose: the button is pressed on the
 # real Title.tscn, because every menu in this project was correct before it was
 # reachable. The rest is the rule that a key belongs to one action -- rebinding
@@ -576,7 +576,7 @@ step "51/60  Keys can be rebound, and one key means one action"
 # launch.
 run_scene_test "rebinding survives a restart" scenes/tests/Options.tscn OPT   "options open from the title, a taken key is refused, and the change is on disk" "--fixed-fps 60"
 
-step "52/60  Enemies face what they are attacking"
+step "52/61  Enemies face what they are attacking"
 # Reported as "enemies strike in the opposite direction". The mechanism is
 # narrower: damage is radial and a bolt aims from the player's position, so the
 # hit always landed -- what pointed the wrong way was the MODEL. Facing was
@@ -586,7 +586,7 @@ step "52/60  Enemies face what they are attacking"
 # piece of information a parry is timed against.
 run_scene_test "enemies turn to face the player" scenes/tests/EnemyFacing.tscn FACE   "a committed melee enemy turns mid-windup, and a stationary sentry turns at all" "--fixed-fps 60"
 
-step "53/60  The floor has an underside, and no hole is dark"
+step "53/61  The floor has an underside, and no hole is dark"
 # Reported as "the floor seems to vanish and the platforms look fragmented in
 # the void". Two causes: a walkable surface was a 15cm plank with nothing under
 # it, and the torches are at y=2.4 with nothing below, so the space to jump
@@ -596,7 +596,7 @@ step "53/60  The floor has an underside, and no hole is dark"
 # ABOVE the floor it was meant to be under.
 run_scene_test "platforms stand on something" scenes/tests/FloorLegibility.tscn FLOOR   "every wide platform has a stone face under it and every hole has a light in it" "--fixed-fps 60"
 
-step "54/60  An arena cannot be run past"
+step "54/61  An arena cannot be run past"
 # The Arena chunk exists to teach the charge attack and was the easiest ground
 # in the room to sprint across -- the widest flat run, enemies in the middle.
 # The gate that fixes it is checked for OPENING as much as for blocking: a gate
@@ -604,7 +604,7 @@ step "54/60  An arena cannot be run past"
 # player is blocked" would call that a pass.
 run_scene_test "the arena holds until it is cleared" scenes/tests/ArenaLock.tscn ARENA   "running at the barrier gets nowhere, clearing the arena opens it" "--fixed-fps 60"
 
-step "55/60  Enemies hold the ground they were placed on"
+step "55/61  Enemies hold the ground they were placed on"
 # Every enemy in every generated room patrolled toward world x = -3, wherever
 # it stood: the builder added the enemy to the tree, THEN wrote its position,
 # THEN wired its patrol markers, and _Ready runs on the first of those three.
@@ -613,7 +613,7 @@ step "55/60  Enemies hold the ground they were placed on"
 # (98.0, -93.7) in a check that was counting bodies for another reason.
 run_scene_test "enemies guard their own ground" scenes/tests/EnemyPost.tscn POST   "patrol anchors sit near the enemy, and the room still has its population ten seconds later" "--fixed-fps 60"
 
-step "56/60  The game exports and starts as a binary"
+step "56/61  The game exports and starts as a binary"
 # The last thing between the project and a person who is not sitting at this
 # machine. It is checked because the export FAILED SILENTLY for as long as it
 # existed: the .NET side needs a LostCrownlike.sln next to the .csproj, the
@@ -630,7 +630,7 @@ else
 fi
 rm -rf "$ROOT/build/verify"
 
-step "57/60  Continue continues, and a new run is new"
+step "57/61  Continue continues, and a new run is new"
 # A run is ten rooms and twelve minutes, so it cannot only be played in one
 # sitting. Two entry points are worth having only if they differ, and each of
 # them fails in a way that looks fine: a Continue that starts at room 0 is a
@@ -640,7 +640,7 @@ step "57/60  Continue continues, and a new run is new"
 # "New run" opened with DoubleJump and Dash in hand and four rooms cleared.
 run_scene_test "the title's two doors differ" scenes/tests/Continue.tscn CONT   "Continue resumes the saved room, New run starts over with nothing" "--fixed-fps 60"
 
-step "58/60  There is music, and it moves"
+step "58/61  There is music, and it moves"
 # The dungeon already had a drone, which is a room tone: twelve minutes of one
 # held chord is a hum rather than a score. Three claims, and the first two are
 # what a "there is audio" check would miss -- the generated voice never runs
@@ -651,7 +651,7 @@ step "58/60  There is music, and it moves"
 # check a coin flip.
 run_scene_test "the music plays and wanders" scenes/tests/Music.tscn MUSIC   "the music voice is never starved, the figure moves, and the boss sounds different" "--fixed-fps 60"
 
-step "59/60  Each act has its own atmosphere"
+step "59/61  Each act has its own atmosphere"
 # The recorded beds. Three CC0 atmospheres and a boss theme, bound to WHERE the
 # player is by a rule rather than a table -- BedForRoom divides the run into
 # thirds, so the mapping survives RunLength being retuned, and RunLength has
@@ -675,7 +675,21 @@ step "59/60  Each act has its own atmosphere"
 # theme playing in room 0.
 run_scene_test "each act sounds like itself" scenes/tests/Beds.tscn BEDS   "acts, boss and all three room shapes each get their own atmosphere" "--fixed-fps 60"
 
-step "60/60  The engine stays quiet"
+step "60/61  An armoured fight at the halfway mark"
+# The parry is this game's signature move, and armour is the only thing that
+# REQUIRES it: every blow becomes 2 chip damage and the only thing that opens
+# the fight is a perfect parry. Until the Sentinel the player met that demand
+# once, in the last room, twelve minutes in -- so the mechanic the finale rests
+# on was being taught by the finale. It is also the run's only punctuation.
+#
+# What is asserted is what makes it a lesson rather than a bigger grunt: a
+# 55-damage blow lands as chip, the door does not open while it lives, and it is
+# a Sentinel rather than the Warden. A check that only found "an enemy in room 5"
+# would pass on a reskinned melee grunt, which is what this must not be.
+# Dropping the seal turns it red.
+run_scene_test "the halfway fight is sealed and armoured" scenes/tests/Sentinel.tscn SENTINEL   "an armoured fight at the halfway mark, sealed in, and not the Warden" "--fixed-fps 60"
+
+step "61/61  The engine stays quiet"
 # Cross-cutting. Each scene test above asserts its own outcome; this asserts
 # that reaching that outcome printed no engine error. It is the check that was
 # missing when every room transition in the shipped game failed a resource

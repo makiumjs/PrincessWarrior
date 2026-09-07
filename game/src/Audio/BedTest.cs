@@ -82,8 +82,14 @@ public partial class BedTest : Node
             .Any(v => v is { Playing: true } && v.VolumeDb > -40f);
 
         int last = _rooms.RunLength - 1;   // _beds ha una voce in piu': il ritorno
+        // Act II is read one room PAST the halfway mark, and that is not a
+        // dodge. The halfway room holds the Sentinel -- an armoured, sealed
+        // fight -- and a sealed fight takes the boss theme, which is the
+        // behaviour this project wants: the atmosphere marks the punctuation.
+        // Sampling act II on top of it would be asking the wrong room.
         bool acts = _beds[0] == "act1_forgotten_crypts"
-                 && _beds[_rooms.RunLength / 2] == "act2_sunken_catacombs"
+                 && _beds[_rooms.RunLength / 2] == "boss_theme"
+                 && _beds[_rooms.RunLength / 2 + 1] == "act2_sunken_catacombs"
                  && _beds[(int)(_rooms.RunLength * 0.75f)] == "act3_wardens_sanctum"
                  && _beds[last] == "boss_theme";
         var distinctLayers = _layers.Where(s => s.Length > 0).Distinct().Count();

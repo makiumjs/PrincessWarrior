@@ -1370,3 +1370,43 @@ whatever room it happened to be standing in, and reported a blade travel of zero
 -- correctly, since spikes open the run and blades belong to the second half,
 and no room had both. Measuring two things in one place only works while they
 live there.
+
+## The finale was teaching its own mechanic
+
+The parry is this game's signature move, and armour is the only thing that
+requires it: the Warden turns every blow into 2 chip damage and opens only to a
+perfect parry. The player met that demand exactly once -- in the last room,
+twelve minutes in. The mechanic the whole finale rests on was being taught by
+the finale.
+
+The `Sentinel` stands at the halfway room: a `Warden` by behaviour and half of
+one by numbers. It keeps the armour, the stagger and the long tell, which are
+the lesson; it gives up the health, the second phase and the reach, which are
+what make the Warden a wall rather than a teacher. Its stat block is a
+`protected virtual Configure()` extracted from `Warden._Ready`, so it inherits
+the FIGHT without inheriting the numbers -- and it spawns through the same path,
+joins the same "boss" group and seals its exit the same way, because a second
+parallel way of being a boss is the kind of thing this project has deleted
+twice.
+
+It is also the run's only other punctuation. Twelve minutes with one event is a
+long flat line.
+
+**Two checks went red, and one of them was the game behaving correctly.**
+
+*The bed check* asserted act II's atmosphere at the halfway room. The halfway
+room now holds a sealed armoured fight, so it takes the boss theme -- which is
+what the design wants: the music marks the punctuation. The check reads act II
+one room later and asserts the boss theme where it now belongs.
+
+*The enemy-mix check* reported the second half as LIGHTER than the first, at 2.5
+enemies against 5.5. Two causes stacked. The halfway room holds one enemy by
+design, like the boss room, and was being counted; and the check walks the run by
+teleporting onto exits, so the new seal parked it at room 5 and it surveyed six
+rooms instead of nine, leaving the back half with a single sample. It now skips
+both sealed fights when averaging and frees the sealed one to walk past it --
+whether a door holds is check 60's question, and answering it twice in two places
+is how a suite ends up with two truths about one mechanic.
+
+The measured run is now 5, 8, 5, 4, [1], 4, 13, 4, [1]: 5.5 enemies a room in the
+first half against 7.0 in the second, with the two sealed fights bracketed out.

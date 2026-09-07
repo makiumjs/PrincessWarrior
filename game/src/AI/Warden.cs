@@ -52,6 +52,18 @@ public partial class Warden : EnemyController
 
     public override void _Ready()
     {
+        Configure();
+        base._Ready();
+        AddToGroup("boss");
+    }
+
+    /// The stat block, virtual so a lesser one can inherit the FIGHT without
+    /// inheriting the numbers. Everything that makes the Warden the Warden --
+    /// armour that turns every blow into chip damage, a stagger only a perfect
+    /// parry opens, a tell long enough to read -- is behaviour in this class,
+    /// not values here.
+    protected virtual void Configure()
+    {
         PatrolSpeed = 1.6f;
         ChaseSpeed = 3.2f;          // slower than the player: it is met, not fled
         AttackRange = 2.2f;         // longer reach than a grunt's 1.4
@@ -67,10 +79,6 @@ public partial class Warden : EnemyController
         StaggerDuration = 1.6f;
         ParryStaggerRadius = 4.0f;
         SteerDeadzone = 0.3f;
-
-        base._Ready();
-
-        AddToGroup("boss");
     }
 
     /// Armour. Note what this does NOT do: it never returns 0. A boss that is

@@ -657,7 +657,7 @@ public partial class DungeonRoomBuilder : Node3D
             Name = "RoomExit",
             NextRoomIndex = RoomIndex + 1,
             RunLength = RunLength,
-            SealedUntilBossDies = IsBossRoom,
+            SealedUntilBossDies = IsBossRoom || IsHalfwayRoom,
             Position = new Vector3(last.X + last.Width - 1.5f, last.Y + 1.2f, 0f),
         };
         exit.AddChild(new CollisionShape3D
@@ -714,7 +714,7 @@ public partial class DungeonRoomBuilder : Node3D
         // rotation in would give the player something cheaper to hit than the
         // armoured thing in the middle, and the whole point of the fight is
         // that there is no cheaper option.
-        if (IsBossRoom)
+        if (IsBossRoom || IsHalfwayRoom)
         {
             SpawnBoss(composer);
             return;
@@ -802,16 +802,30 @@ public partial class DungeonRoomBuilder : Node3D
     /// the boss to a room that no longer exists.
     public bool IsBossRoom => RoomIndex == RunLength - 1;
 
+    /// The halfway room, where the run's only other sealed fight stands. It is
+    /// the first room of the second half, which is also where the layouts change
+    /// character -- so the Sentinel is the thing that MARKS the change rather
+    /// than an event dropped into the middle of a corridor.
+    public bool IsHalfwayRoom => RunLength > 3 && RoomIndex == RunLength / 2;
+
     /// Drops the boss on the widest platform in the room, which the composer
     /// builds as the arena. Placed off the last encounter point rather than at
     /// the exit so the player crosses the room and meets it, instead of
     /// walking into it at the door.
     private void SpawnBoss(MicroChunkComposer composer)
     {
-        var bossScene = GD.Load<PackedScene>("res://scenes/enemies/Warden.tscn");
+        // The Sentinel is a Warden by behaviour and half of one by numbers, and
+        // it stands where the run changes character. Same spawn path on purpose:
+        // both are in the "boss" group, both seal their exit, and both are found
+        // by everything that looks for a boss -- a second, parallel way of being
+        // a boss is exactly the kind of thing this project has deleted twice.
+        string path = IsBossRoom
+            ? "res://scenes/enemies/Warden.tscn"
+            : "res://scenes/enemies/Sentinel.tscn";
+        var bossScene = GD.Load<PackedScene>(path);
         if (bossScene == null)
         {
-            GD.PrintErr("DungeonRoomBuilder: Warden.tscn not found; the last room has no boss");
+            GD.PrintErr($"DungeonRoomBuilder: {path} not found; the room has no boss");
             return;
         }
 
@@ -830,7 +844,7 @@ public partial class DungeonRoomBuilder : Node3D
             warden.SetPatrolPoints(boss.GlobalPosition + new Vector3(-arena.Width * 0.3f, 0f, 0f),
                                    boss.GlobalPosition + new Vector3(arena.Width * 0.25f, 0f, 0f));
 
-        GD.Print($"[Room] boss placed at x={boss.GlobalPosition.X:0.0} on a {arena.Width:0.0}-wide arena");
+        GD.Print($"[Room] {(IsBossRoom ? "boss" : "sentinel")} placed at x={boss.GlobalPosition.X:0.0} on a {arena.Width:0.0}-wide arena");
     }
 
     /// One platform: visual tiles on the 4-unit grid, and ONE box collider for

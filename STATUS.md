@@ -40,6 +40,12 @@ A `Sweep` is the first obstacle in the game that **moves**: a flat corridor
 crossed by blades on a cycle, where what costs you is when you enter rather than
 how far you can jump.
 
+**Halfway there stands a Sentinel**: armoured like the Warden, sealed in like
+the Warden, and half its health. The parry is the only thing that opens armour,
+and until this the player met that demand once -- in the last room, twelve
+minutes in. Now the mechanic the finale rests on is taught before the finale,
+and the run has a second event in it.
+
 **A run is ten rooms of about 200 metres**, twelve minutes or so, and the last
 one is a boss. Arenas along the way seal behind a barrier until they are
 cleared, so the fight in them is not optional. Difficulty climbs to its maximum
@@ -54,7 +60,7 @@ lives. Kill it and the run ends.
 ## What is proven, and by what
 
 
-`bash tools/verify.sh` — 60 checks, currently all green. It exits non-zero on
+`bash tools/verify.sh` — 61 checks, currently all green. It exits non-zero on
 failure and aborts on a build error rather than testing the previous assembly,
 and every check in it has been verified to FAIL correctly, not just to pass.
 
