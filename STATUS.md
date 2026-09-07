@@ -36,7 +36,9 @@ so closing costs you ground it keeps taking back. The first five rooms are built
 layouts that ask one verb at a time; the last five draw from three of their own,
 built on chunks that ask for two at once -- a `Chasm` is a dash across into a
 wall climb, a `Rift` is a drop straight into a gap with no runway at the bottom.
-A `Sweep` is the first obstacle in the game that **moves**: a flat corridor
+A `Latch` is the first thing the player **acts on** rather than crosses: a
+barrier that opens when its lever is struck with the sword. A `Sweep` is the
+first obstacle that **moves**: a flat corridor
 crossed by blades on a cycle, where what costs you is when you enter rather than
 how far you can jump.
 
@@ -60,7 +62,7 @@ lives. Kill it and the run ends.
 ## What is proven, and by what
 
 
-`bash tools/verify.sh` — 61 checks, currently all green. It exits non-zero on
+`bash tools/verify.sh` — 62 checks, currently all green. It exits non-zero on
 failure and aborts on a build error rather than testing the previous assembly,
 and every check in it has been verified to FAIL correctly, not just to pass.
 

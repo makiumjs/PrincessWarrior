@@ -84,6 +84,11 @@ public partial class EventBus : Node
     /// different in a shaft than in a corridor.
     [Signal] public delegate void RoomShapeEventHandler(string shape);
 
+    /// A lever was struck. Carries where, so audio and UI can react to the
+    /// place rather than having to find the node -- the same reason Parried
+    /// carries a position.
+    [Signal] public delegate void LeverThrownEventHandler(Vector3 atPosition);
+
     /// The boss's state, for the HUD to draw. Flattened to primitives for the
     /// same reason as PlayerDamaged, and routed through the bus rather than
     /// letting the HUD find the boss: the HUD's one architectural rule is that
@@ -123,6 +128,9 @@ public partial class EventBus : Node
 
     public void EmitRoomShape(string shape) =>
         EmitSignal(SignalName.RoomShape, shape);
+
+    public void EmitLeverThrown(Vector3 atPosition) =>
+        EmitSignal(SignalName.LeverThrown, atPosition);
 
     public void EmitBossStateChanged(bool alive, float healthFraction, bool armoured, bool enraged) =>
         EmitSignal(SignalName.BossStateChanged, alive, healthFraction, armoured, enraged);

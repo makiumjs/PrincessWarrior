@@ -26,6 +26,11 @@ public enum ChunkKind
     /// here is a static distance measured against the player's jump, so the only
     /// axis the generator had for a later room was "bigger".
     Sweep,
+    /// A barrier with a lever in front of it. The one chunk that asks the
+    /// player to ACT on the level rather than cross it: everything else here is
+    /// walk-into-it, and nothing in ten rooms has ever asked for a decision
+    /// that is not "when do I jump".
+    Latch,
     /// A drop straight into a gap, with no runway at the bottom. Nothing else
     /// here asks the player to keep momentum THROUGH a height change: a Drop is
     /// free and a DashGap is entered at a walk.
@@ -111,6 +116,13 @@ public sealed class MicroChunkComposer
     /// together is a wall, and staggered they are a rhythm.
     public IReadOnlyList<(Vector3 Position, float Phase)> Sweeps => _sweeps;
     private readonly List<(Vector3, float)> _sweeps = new();
+
+    /// Lever-and-barrier pairs: where the lever stands, and where the slab is.
+    /// Emitted together because they are one obstacle -- a barrier whose lever
+    /// lives in another chunk is a locked door with the key in another room,
+    /// which is the metroidvania this game deliberately is not.
+    public IReadOnlyList<(Vector3 Lever, Vector3 Gate)> Latches => _latches;
+    private readonly List<(Vector3, Vector3)> _latches = new();
 
     public IReadOnlyList<WallRect> Walls => _walls;
     private readonly List<WallRect> _walls = new();
@@ -226,6 +238,24 @@ public sealed class MicroChunkComposer
                     // band the side-on camera actually frames.
                     _sweeps.Add((new Vector3(at, _cursorY + 3.0f, 0f), i / (float)blades));
                 }
+                break;
+            }
+            case ChunkKind.Latch:
+            {
+                // Ground, lever, barrier, ground. The lever stands BEFORE the
+                // slab and on the same floor, which is the modest version on
+                // purpose: putting it up a ledge or across a gap is better
+                // design and would make the chunk unprovable, because the
+                // traversal bot swings at what blocks it and does not go
+                // looking. The verb comes first; where the verb is asked for
+                // can move once the bot can be trusted to search.
+                Emit(6f);
+                float leverX = _cursorX - 2.2f;
+                Emit(4f);
+                float gateX = _cursorX - 1.0f;
+                _latches.Add((new Vector3(leverX, _cursorY, 0f),
+                              new Vector3(gateX, _cursorY, 0f)));
+                Emit(6f);
                 break;
             }
             case ChunkKind.Arena:

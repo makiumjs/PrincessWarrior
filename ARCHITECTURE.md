@@ -310,6 +310,7 @@ call `Core.IDamageable.TakeDamage`.
 | `RoomEntered` | `int index, int total` | World | UI, Audio |
 | `BossStateChanged` | `bool alive, float healthFraction, bool armoured, bool enraged` | AI | UI, Audio |
 | `RoomShape` | `string shape` -- "flat", "open" or "climb" | World | Audio |
+| `LeverThrown` | `Vector3 atPosition` | World | Audio, UI |
 
 ## Shared types (`Core/`)
 
@@ -386,6 +387,24 @@ hand-guessed distance.
   | `Chasm` | a dash across, then a wall climb out -- two verbs in one breath |
   | `Rift` | a drop straight into a gap, with no runway at the bottom |
   | `Sweep` | timing: a flat corridor under swinging axes |
+  | `Latch` | an act: a barrier that opens when its lever is struck |
+
+  `Latch` is the only one that asks the player to ACT on the level rather than
+  cross it. Everything else in this game is walk-into-it -- a checkpoint
+  announces itself when you touch it, a hazard hurts you when you touch it, an
+  arena gate opens when the last enemy dies -- so in ten rooms nothing had ever
+  asked for a decision that was not "when do I jump".
+
+  The lever is STRUCK rather than pressed, and that is about the harness as much
+  as the game: a use key is a verb the traversal bot does not have, and a chunk
+  the bot cannot open is a chunk the metric contract cannot promise. The bot
+  already swings at whatever blocks it. `LeverSwitch` therefore implements
+  `IDamageable` and sits on the Enemy layer, so the ordinary attack hitbox finds
+  it with no new plumbing. `LatchGate` watches the lever's state by position
+  rather than subscribing to it: rooms are rebuilt constantly, and a
+  subscription across a rebuild is a dangling handler -- this project has
+  already deleted one system that kept receiving events after it should have
+  stopped existing.
 
   `Sweep` is the one kind whose difficulty is not a distance. Every other entry
   is sized from `PlayerMetrics` -- a gap is 2.44m, a step-up 1.88 -- so the only

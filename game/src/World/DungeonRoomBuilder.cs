@@ -273,6 +273,11 @@ public partial class DungeonRoomBuilder : Node3D
         yield return () =>
         {
             foreach (var h in composer.Hazards) AddChild(new SpikeHazard { Position = h });
+            foreach (var (lever, gate) in composer.Latches)
+            {
+                AddChild(new LeverSwitch { Name = $"Lever{lever.X:F0}", Position = lever });
+                AddChild(new LatchGate { Name = $"Latch{gate.X:F0}", Position = gate, LeverX = lever.X });
+            }
             foreach (var (at, phase) in composer.Sweeps)
                 AddChild(new SweepHazard
                 {
@@ -574,7 +579,7 @@ public partial class DungeonRoomBuilder : Node3D
                         .Add(ChunkKind.Sweep)
                         .Add(ChunkKind.WallShaft, 0.9f)
                         .Add(ChunkKind.Rift)
-                        .Add(ChunkKind.Gauntlet, 0.7f)
+                        .Add(ChunkKind.Latch)
                         .Add(ChunkKind.Chimney)
 
                         .Add(ChunkKind.Drop)
@@ -594,7 +599,7 @@ public partial class DungeonRoomBuilder : Node3D
                         .Add(ChunkKind.Gap)
                         .Add(ChunkKind.Gauntlet, 0.7f)
 
-                        .Add(ChunkKind.StepUp)
+                        .Add(ChunkKind.Latch)
                         .Add(ChunkKind.Chasm, 0.85f)
                         .Add(ChunkKind.Rift)
                         .Add(ChunkKind.DashGap, 0.9f)
@@ -621,7 +626,7 @@ public partial class DungeonRoomBuilder : Node3D
                         .Add(ChunkKind.Chimney, 0.9f)
                         .Add(ChunkKind.Drop)
                         .Add(ChunkKind.Spikes)
-                        .Add(ChunkKind.Gauntlet, 0.7f)
+                        .Add(ChunkKind.Latch)
                         .Add(ChunkKind.WallShaft, 0.9f)
 
                         .Add(ChunkKind.Chasm, 0.9f)
