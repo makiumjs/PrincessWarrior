@@ -385,7 +385,7 @@ hand-guessed distance.
   | `Drop` | nothing; a single step DOWN, free to cross |
   | `Chasm` | a dash across, then a wall climb out -- two verbs in one breath |
   | `Rift` | a drop straight into a gap, with no runway at the bottom |
-  | `Sweep` | timing: a flat corridor crossed by blades on a cycle |
+  | `Sweep` | timing: a flat corridor under swinging axes |
 
   `Sweep` is the one kind whose difficulty is not a distance. Every other entry
   is sized from `PlayerMetrics` -- a gap is 2.44m, a step-up 1.88 -- so the only

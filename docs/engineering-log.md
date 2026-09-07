@@ -1410,3 +1410,35 @@ is how a suite ends up with two truths about one mechanic.
 
 The measured run is now 5, 8, 5, 4, [1], 4, 13, 4, [1]: 5.5 enemies a room in the
 first half against 7.0 in the second, with the two sealed fights bracketed out.
+
+## The blades were barrels
+
+Reported from play in three words. It was accurate, and it was written down in
+the source: the pack ships no blade, so the first `Sweep` used `barrel_large`
+turned on its side. The comment said as much and the check was green -- it asked
+whether the hazard MOVED, which a barrel does perfectly well.
+
+The pack does ship an axe, and the fix went further than the prop. A blade that
+slides sideways at chest height has no tell: it is at a place, then it is at
+another place. A pendulum announces itself -- the swing carries the eye ahead of
+the blade, and the pause at the top of each side is where a player decides to
+go. So the hazard rotates about a pivot now, with the axe hanging from it: the
+model's handle runs up +Y from a grip at the origin, so a half turn about Z
+points it at the floor and the head, 0.59 off the shaft in -X, becomes the weight
+at the end of the arm. The hurtbox is only the head, because a box spanning the
+shaft would kill anyone walking under the pivot, which is the one place an arc is
+supposed to be safe.
+
+**Then it was looked at, which is the part the barrel was a failure of.** A
+throwaway probe drove the game WINDOWED -- `--headless` forces the dummy renderer
+and the viewport texture comes back null -- parked the player beside a sweep, and
+saved three frames across one swing. The first pass hung 2.9m from a pivot 3.6m
+up: the shaft went through the ceiling of the band the side-on camera frames and
+the head stood as tall as the player. Sized against the corridor rather than
+against what sounded dramatic, it is 2.4m from a pivot at 3.0, and the whole
+pendulum fits in shot.
+
+The check needed one correction to keep meaning anything: it read the hazard
+node's own X, and the node is now the pivot, which does not move. It follows the
+head. A measurement that survives a change of mechanism by accident is a
+measurement that was not about the mechanism.

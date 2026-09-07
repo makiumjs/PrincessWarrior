@@ -218,7 +218,13 @@ public sealed class MicroChunkComposer
                 for (int i = 0; i < blades; i++)
                 {
                     float at = x0 + run * (i + 1) / (blades + 1);
-                    _sweeps.Add((new Vector3(at, _cursorY + 1.6f, 0f), i / (float)blades));
+                    // The PIVOT height: the axe hangs 2.4m below it, so the
+                    // head passes about 0.6m off the floor at the bottom of the
+                    // swing -- low enough to be a threat, high enough that
+                    // standing under the pivot is the safe place an arc needs,
+                    // and low enough that the whole pendulum fits inside the
+                    // band the side-on camera actually frames.
+                    _sweeps.Add((new Vector3(at, _cursorY + 3.0f, 0f), i / (float)blades));
                 }
                 break;
             }

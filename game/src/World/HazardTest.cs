@@ -50,7 +50,10 @@ public partial class HazardTest : Node
         if (_f > 505) _sweep ??= FindSweep(GetTree().Root);
         if (_sweep != null)
         {
-            float x = _sweep.GlobalPosition.X;
+            // The BLADE, not the node. The hazard is now a pendulum and the
+            // node is its pivot, which never moves: reading the Area3D's own
+            // position reported a swinging axe as a parked one.
+            float x = _sweep.BladePosition.X;
             _sweepMinX = Mathf.Min(_sweepMinX, x);
             _sweepMaxX = Mathf.Max(_sweepMaxX, x);
         }

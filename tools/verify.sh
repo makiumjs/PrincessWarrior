@@ -185,10 +185,12 @@ step "16/61  Environmental hazards exist"
 # which matters now that the player owns them from the first frame.
 #
 # The claim is that it MOVES: a parked blade is scenery, and scenery is what the
-# level already had. Measured as the spread of its X against an absolute 4m of a
-# nominal 6m stroke, not against its own Reach -- a threshold read off the value
-# under test passes whatever that value becomes. Freezing it turns this red at
-# 0.00m.
+# level already had. It is a pendulum, so the measurement follows the HEAD and
+# not the node -- the node is the pivot and never moves, and reading it reported
+# a swinging axe as a parked one. Measured as the spread of that head's X across
+# the run, against an absolute 4m of a 4.5m arc rather than against the hazard's
+# own ArcDegrees: a threshold read off the value under test passes whatever that
+# value becomes. Freezing the swing turns this red at 0.00m.
 #
 # The two traps do not share a room: spikes open the run, blades belong to the
 # second half. They are measured in sequence, and the builder is asked where
