@@ -177,8 +177,24 @@ run_scene_test "held heavy hits harder than a tap" scenes/tests/ChargeAttack.tsc
 step "16/60  Environmental hazards exist"
 # PhysicsLayers.Hazard was declared from the start with nothing ever on it, so
 # the whole category of environmental danger lived only in an enum.
-run_scene_test "spikes damage on a cooldown" scenes/tests/Hazard.tscn HAZARD \
-  "a spike trap is generated and hurts the player repeatedly"
+# Extended when the level got its first MOVING obstacle. Everything before it was
+# a static distance sized from PlayerMetrics -- a gap is 2.44m, a step is 1.88 --
+# so the only axis the generator had for a later room was making those numbers
+# bigger, which is why the second half read as the first half louder. A blade
+# cannot be sized away, and it cannot be trivialised by owning every ability,
+# which matters now that the player owns them from the first frame.
+#
+# The claim is that it MOVES: a parked blade is scenery, and scenery is what the
+# level already had. Measured as the spread of its X against an absolute 4m of a
+# nominal 6m stroke, not against its own Reach -- a threshold read off the value
+# under test passes whatever that value becomes. Freezing it turns this red at
+# 0.00m.
+#
+# The two traps do not share a room: spikes open the run, blades belong to the
+# second half. They are measured in sequence, and the builder is asked where
+# each one lives rather than assumed.
+run_scene_test "traps damage, and one of them moves" scenes/tests/Hazard.tscn HAZARD \
+  "a spike trap damages on a repeating cooldown, and a blade sweeps its corridor"
 
 step "17/60  Save survives a long session"
 # Every death and checkpoint rewrites the file. This compresses 20 room

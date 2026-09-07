@@ -21,6 +21,11 @@ public enum ChunkKind
     /// ability the game has said everything it has to say and can only repeat
     /// itself with bigger numbers.
     Chasm,
+    /// A corridor crossed by blades that move on a cycle. The first chunk whose
+    /// difficulty is a QUESTION OF TIMING rather than of size: every other kind
+    /// here is a static distance measured against the player's jump, so the only
+    /// axis the generator had for a later room was "bigger".
+    Sweep,
     /// A drop straight into a gap, with no runway at the bottom. Nothing else
     /// here asks the player to keep momentum THROUGH a height change: a Drop is
     /// free and a DashGap is entered at a walk.
@@ -99,6 +104,13 @@ public sealed class MicroChunkComposer
     /// Floor traps: world position of each spike tile.
     public IReadOnlyList<Vector3> Hazards => _hazards;
     private readonly List<Vector3> _hazards = new();
+
+    /// Moving hazards: where each blade is anchored, and how far into its cycle
+    /// it starts. The phase is carried here rather than set in the builder
+    /// because it is a property of the CHUNK -- a row of blades all swinging
+    /// together is a wall, and staggered they are a rhythm.
+    public IReadOnlyList<(Vector3 Position, float Phase)> Sweeps => _sweeps;
+    private readonly List<(Vector3, float)> _sweeps = new();
 
     public IReadOnlyList<WallRect> Walls => _walls;
     private readonly List<WallRect> _walls = new();
@@ -190,6 +202,24 @@ public sealed class MicroChunkComposer
                 float trapX = _cursorX + run * 0.5f;
                 Emit(run);
                 _hazards.Add(new Vector3(trapX, _cursorY + 0.25f, 0f));
+                break;
+            }
+            case ChunkKind.Sweep:
+            {
+                // Solid ground the whole way: the danger is timing, not
+                // spacing, and a blade you can fall past is just a gap with
+                // decoration. Three blades, each a third of a cycle behind the
+                // one before, so crossing at a constant walk meets them at
+                // different points of their travel.
+                const int blades = 3;
+                float run = Mathf.Max(_m.SafeGap * 3.4f, 16f);
+                float x0 = _cursorX;
+                Emit(run);
+                for (int i = 0; i < blades; i++)
+                {
+                    float at = x0 + run * (i + 1) / (blades + 1);
+                    _sweeps.Add((new Vector3(at, _cursorY + 1.6f, 0f), i / (float)blades));
+                }
                 break;
             }
             case ChunkKind.Arena:

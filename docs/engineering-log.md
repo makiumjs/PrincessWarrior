@@ -1329,3 +1329,44 @@ The general shape is one this project keeps meeting: a check that passes is not
 the same as a check that is asking about the mechanic. Two of these three had
 been quietly measuring something else for as long as the thing they measured
 happened to coincide with the thing they meant.
+
+## The first thing in the level that moves
+
+Every obstacle in this game was a static distance. A gap is 2.44 metres because
+`SafeGap` says so; a step-up is 1.88; a shaft is a multiple of the double jump.
+That is the Spatial Metric Contract working exactly as intended, and it is also
+why the second half of a run read as the first half louder: when every obstacle
+is a length, the only thing a later room can do is be longer.
+
+`Sweep` is a flat corridor crossed by three blades on a 2.4-second cycle, each a
+third of a cycle behind the one before. The floor is solid the whole way. What
+costs you is WHEN you enter, which is a question no amount of jump tuning
+answers and which survives the player owning every ability from the first frame.
+
+**It damages rather than blocks, and that is a decision about the harness as
+much as about the game.** The obvious moving obstacle is a platform you ride,
+and a platform you ride is a rhythm the traversal bot cannot prove: it holds
+right and never waits. Teaching it to wait would make it a better player and a
+worse witness -- the whole contract rests on a deliberately clumsy bot crossing
+rooms, because a room a bad bot can cross is one the metrics really do
+guarantee. A blade lets a bad player through with a bruise and a good one
+through clean, so the chunk stays provably crossable while the timing is real. A
+ridden platform is still open, and it needs the bot to learn to wait first.
+
+The blade eases at each end -- a cosine rather than a saw -- because a
+constant-speed blade gives no cue about when it is about to turn around, and the
+cue is the mechanic.
+
+**The check for it asks whether it MOVES, not whether it exists.** A parked
+blade is scenery, and scenery is precisely what the level already had; a check
+that found the node would have passed on one that never budged. It measures the
+spread of the blade's X across the run, against an absolute 4 metres of a
+nominal 6-metre stroke -- not against the node's own `Reach`, because a
+threshold read off the value under test passes whatever that value becomes.
+Freezing the sweep turns it red at 0.00m.
+
+It also cost a smaller lesson. The first version looked for both traps in
+whatever room it happened to be standing in, and reported a blade travel of zero
+-- correctly, since spikes open the run and blades belong to the second half,
+and no room had both. Measuring two things in one place only works while they
+live there.

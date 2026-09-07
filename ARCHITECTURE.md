@@ -385,6 +385,21 @@ hand-guessed distance.
   | `Drop` | nothing; a single step DOWN, free to cross |
   | `Chasm` | a dash across, then a wall climb out -- two verbs in one breath |
   | `Rift` | a drop straight into a gap, with no runway at the bottom |
+  | `Sweep` | timing: a flat corridor crossed by blades on a cycle |
+
+  `Sweep` is the one kind whose difficulty is not a distance. Every other entry
+  is sized from `PlayerMetrics` -- a gap is 2.44m, a step-up 1.88 -- so the only
+  axis the generator had for a later room was a bigger number, and a widened gap
+  is the same idea at a different size rather than a new one. A blade cannot be
+  sized away, and it stays a question once the player owns every ability.
+
+  It damages rather than blocks, deliberately. A moving platform you must WAIT
+  for is a rhythm the traversal bot cannot prove: it holds right and never
+  waits, and a bot taught to wait stops being the deliberately clumsy witness
+  the whole contract rests on. A blade lets a bad player through with a bruise
+  and a good one through clean, so the chunk stays provably crossable while the
+  timing is real. A platform that has to be ridden is still open, and it needs
+  the bot to learn to wait before the check could mean anything.
 
   **The player owns all four abilities from the first frame**, so a chunk no
   longer places a pickup and no longer gets downgraded when the player lacks

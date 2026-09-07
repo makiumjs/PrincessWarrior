@@ -273,6 +273,17 @@ public partial class DungeonRoomBuilder : Node3D
         yield return () =>
         {
             foreach (var h in composer.Hazards) AddChild(new SpikeHazard { Position = h });
+            foreach (var (at, phase) in composer.Sweeps)
+                AddChild(new SweepHazard
+                {
+                    Name = $"Sweep{at.X:F0}",
+                    Position = at,
+                    // The phase is a fraction of a cycle in the chunk; the node
+                    // wants seconds, and it reads its own PeriodSeconds only
+                    // after _Ready, so the multiply happens here against the
+                    // same default.
+                    PhaseOffset = phase * 2.4f,
+                });
             foreach (var w in composer.Walls) PlaceClimbableWall(w);
         };
 
@@ -560,7 +571,7 @@ public partial class DungeonRoomBuilder : Node3D
                         .Add(ChunkKind.Gauntlet)
 
                         .Add(ChunkKind.Chasm, 0.9f)
-                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Sweep)
                         .Add(ChunkKind.WallShaft, 0.9f)
                         .Add(ChunkKind.Rift)
                         .Add(ChunkKind.Gauntlet, 0.7f)
@@ -602,7 +613,7 @@ public partial class DungeonRoomBuilder : Node3D
                 return c.Add(ChunkKind.Gauntlet)
                         .Add(ChunkKind.Arena)
                         .Add(ChunkKind.Chasm)
-                        .Add(ChunkKind.Spikes)
+                        .Add(ChunkKind.Sweep)
                         .Add(ChunkKind.Gauntlet)
                         .Add(ChunkKind.Rift, 0.9f)
 

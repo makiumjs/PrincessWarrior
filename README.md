@@ -89,7 +89,9 @@ Sixty checks, in order:
 13. repeated room rebuilds do not accumulate nodes
 14. WallJump is granted somewhere and has walls to be used on
 15. holding heavy deals more damage than tapping it — ChargeAttack is a mechanic
-16. a spike trap is generated and damages on a repeating cooldown
+16. a spike trap damages on a repeating cooldown, and a blade sweeps its
+    corridor -- the one obstacle in the level that moves
+    corridor -- the one obstacle in the level that moves
 17. the save is still loadable and matches memory after 20 rooms and 20 deaths
 18. 1500 frames of random input mashing produce no degenerate state, and reach
     8 of the 9 movement states

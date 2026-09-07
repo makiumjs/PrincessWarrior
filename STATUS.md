@@ -36,6 +36,9 @@ so closing costs you ground it keeps taking back. The first five rooms are built
 layouts that ask one verb at a time; the last five draw from three of their own,
 built on chunks that ask for two at once -- a `Chasm` is a dash across into a
 wall climb, a `Rift` is a drop straight into a gap with no runway at the bottom.
+A `Sweep` is the first obstacle in the game that **moves**: a flat corridor
+crossed by blades on a cycle, where what costs you is when you enter rather than
+how far you can jump.
 
 **A run is ten rooms of about 200 metres**, twelve minutes or so, and the last
 one is a boss. Arenas along the way seal behind a barrier until they are
