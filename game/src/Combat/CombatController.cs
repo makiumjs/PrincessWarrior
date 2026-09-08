@@ -49,7 +49,42 @@ public partial class CombatController : Node3D
     // ------------------------------------------------------------------
     [ExportGroup("Combat tunables")]
     [Export] public int ComboWindowMs = 400;
+    /// The fallback, kept because TriggerHitStop's public overload defaults to
+    /// it and something outside Combat may still call that. Every path INSIDE
+    /// this class now names its own tier.
     [Export] public int HitStopDurationMs = 80;
+
+    // -- Hit-stop, by the weight of the blow -------------------------------
+    //
+    // One duration for every impact is the reason a light jab and a fully
+    // charged overhead felt the same in the hand: the freeze is most of what
+    // the player reads as weight, and a constant one flattens the whole
+    // moveset into a single verb. These are the four weights the game actually
+    // has, priced apart far enough to be told apart without being counted.
+    //
+    // The freeze is GLOBAL (Engine.TimeScale), so these are deliberately short.
+    // 90ms is already five frames of a near-stopped world; the next step up
+    // stops reading as impact and starts reading as a hitch.
+
+    /// A cut. Crisp, and over before it can interrupt a combo's rhythm.
+    [Export] public int LightHitStopMs = 25;
+
+    /// A blow. Long enough to feel the weight land.
+    [Export] public int HeavyHitStopMs = 50;
+
+    /// The most damaging thing the player owns, and the only one that gets to
+    /// stop the world long enough to be felt as devastating.
+    [Export] public int ChargedHitStopMs = 90;
+
+    /// A guard that held. The same weight as a heavy hit, because that is what
+    /// it is -- a blow, absorbed.
+    [Export] public int BlockedParryHitStopMs = 50;
+
+    /// The longest freeze in the game, and the only one that is cinematic
+    /// rather than physical. The perfect parry is this project's signature
+    /// move; 120ms is the beat that says so, and it is what the audio duck is
+    /// timed against.
+    [Export] public int PerfectParryHitStopMs = 120;
     [Export] public int LightAttackDamage = 10;
     [Export] public int HeavyAttackDamage = 25;
 
@@ -90,6 +125,21 @@ public partial class CombatController : Node3D
     [Export] public int ChargeTimeMs = 450;
     /// Damage multiplier applied to a fully charged heavy attack.
     [Export] public float ChargeDamageMultiplier = 2.2f;
+
+    /// What the charged heavy multiplies by once the Ember Sigil is held: 2.6
+    /// against the base 2.2, which is 65 damage against 55.
+    ///
+    /// It does NOT accelerate the Warden. Armour is FLAT -- min(ChipDamage,
+    /// amount) -- precisely so a bigger hammer is never the answer to it, so
+    /// the Sigil buys shorter stagger windows and nothing else on that fight.
+    /// That is the reward working as designed rather than a gap in it.
+    [Export] public float SigilChargeMultiplier = 2.6f;
+
+    /// The value to go back to when the run ends. Captured rather than
+    /// hard-coded, so retuning the export above does not leave a second copy
+    /// of 2.2 in this file to drift away from it.
+    private float _baseChargeMultiplier;
+    private bool _sigilSubscribed;
     [Export] public float ChargeKnockbackMultiplier = 1.8f;
     [Export] public int ComboDamageStepBonus = 2; // small flat escalation per combo step
 
@@ -123,6 +173,20 @@ public partial class CombatController : Node3D
 
     public override void _Ready()
     {
+        _baseChargeMultiplier = ChargeDamageMultiplier;
+
+        // Subscribed here rather than reading a flag each swing: the multiplier
+        // is read on every charged release, and a per-hit lookup into another
+        // subsystem is the coupling this architecture spends a whole event bus
+        // avoiding.
+        if (EventBus.Instance != null)
+        {
+            EventBus.Instance.EmberSigilGranted += OnEmberSigilGranted;
+            EventBus.Instance.RestartRequested += OnRunReset;
+            EventBus.Instance.RunCompleted += OnRunCompleted;
+            _sigilSubscribed = true;
+        }
+
         _player = ResolvePlayer();
 
         _hitbox = new Area3D
@@ -147,6 +211,15 @@ public partial class CombatController : Node3D
     {
         if (EventBus.Instance != null)
             EventBus.Instance.Dashed -= OnPlayerDashed;
+
+        if (!_sigilSubscribed) return;
+        if (EventBus.Instance != null)
+        {
+            EventBus.Instance.EmberSigilGranted -= OnEmberSigilGranted;
+            EventBus.Instance.RestartRequested -= OnRunReset;
+            EventBus.Instance.RunCompleted -= OnRunCompleted;
+        }
+        _sigilSubscribed = false;
     }
 
     private PlayerController ResolvePlayer()
@@ -372,11 +445,28 @@ public partial class CombatController : Node3D
 
         damageable.TakeDamage(info);
         EventBus.Instance?.EmitEnemyDamaged(target, info);
-        TriggerHitStop();
+        TriggerHitStop(HitStopForSwing());
 
         if (DebugLogging)
             GD.Print($"[Combat] hit {target.Name} for {damage} damage ({_currentType}, combo {_comboStep})");
     }
+
+    /// <summary>
+    /// How long THIS swing should stop the world for. Charged is checked before
+    /// heavy because a charged attack is also a heavy one, and asking in the
+    /// other order would price every charged hit at 50ms and quietly delete the
+    /// tier that matters most.
+    /// </summary>
+    public int HitStopForSwing()
+    {
+        if (_releasedCharged) return ChargedHitStopMs;
+        return _currentType == AttackType.Heavy ? HeavyHitStopMs : LightHitStopMs;
+    }
+
+    /// Whether the swing being resolved was a released charge. Public so the
+    /// visual can pick a trail that matches the blow rather than keeping its
+    /// own idea of what a charged attack is.
+    public bool SwingIsCharged => _releasedCharged;
 
     public void TriggerHitStop(int durationMs = -1)
     {
@@ -432,7 +522,9 @@ public partial class CombatController : Node3D
         ? 0f
         : 1f - Mathf.Clamp(_parryTimer / (ParryWindowMs / 1000f), 0f, 1f);
 
-    public bool ParryIsPerfectNow => _parryTimer > 0f && _parryHeldFor <= PerfectParryMs / 1000f;
+    public float EffectivePerfectParryMs => PerfectParryMs + (Save.SaveManager.Instance?.GetWorldFlag("rune_parry_window") == true ? 30f : 0f);
+
+    public bool ParryIsPerfectNow => _parryTimer > 0f && _parryHeldFor <= EffectivePerfectParryMs / 1000f;
     public float ParryHeldFor => _parryHeldFor;
     public float TimeSinceLastParryPress { get; private set; } = 999f;
     public float ParryCooldownRemaining => _parryCooldown;
@@ -478,7 +570,7 @@ public partial class CombatController : Node3D
     {
         if (_parryTimer <= 0f) return ParryResult.None;
 
-        bool perfect = _parryHeldFor <= PerfectParryMs / 1000f;
+        bool perfect = _parryHeldFor <= EffectivePerfectParryMs / 1000f;
         _parryTimer = 0f;
         return perfect ? ParryResult.Perfect : ParryResult.Blocked;
     }
@@ -520,4 +612,22 @@ public partial class CombatController : Node3D
     private float WindupSeconds() => (_currentType == AttackType.Heavy ? HeavyWindupMs : LightWindupMs) / 1000f;
     private float ActiveSeconds() => (_currentType == AttackType.Heavy ? HeavyActiveMs : LightActiveMs) / 1000f;
     private float RecoverySeconds() => (_currentType == AttackType.Heavy ? HeavyRecoveryMs : LightRecoveryMs) / 1000f;
+    /// <summary>
+    /// The Ember Sigil sharpens the charged attack for the rest of the run.
+    /// Assignment rather than multiplication: granting it twice in one run --
+    /// which cannot happen today and would be free to happen tomorrow -- must
+    /// not stack into a 3.1x hammer.
+    /// </summary>
+    private void OnEmberSigilGranted()
+    {
+        ChargeDamageMultiplier = SigilChargeMultiplier;
+        GD.Print($"[Combat] Ember Sigil: charged attack x{ChargeDamageMultiplier:0.0#}");
+    }
+
+    private void OnRunCompleted(int roomsCleared) => OnRunReset();
+
+    /// A reward for THIS run does not survive it. Restored from the captured
+    /// base rather than from a literal, so the two cannot disagree.
+    private void OnRunReset() => ChargeDamageMultiplier = _baseChargeMultiplier;
+
 }

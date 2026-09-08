@@ -72,6 +72,40 @@ public partial class PlayerController : CharacterBody3D, IDamageable
     [Export] public float HurtKnockbackHorizontal = 6f;         // extra
     [Export] public float HurtKnockbackVertical = 4f;           // extra
 
+    // -- Haptics -------------------------------------------------------------
+    //
+    // The third channel. The player already reads a fight by eye and by ear;
+    // this is the one that reaches them when both are busy, and it is what
+    // makes a perfect parry feel different from a blocked one in the hand
+    // rather than only on the screen.
+    //
+    // Godot's StartJoyVibration is a no-op when device 0 is absent or has no
+    // rumble, so none of this needs an "is a gamepad connected" branch -- and
+    // such a branch would be a second source of truth about hardware this class
+    // has no business knowing.
+    //
+    // Four weights, priced the way the hit-stop is: the perfect parry is the
+    // sharpest, taking a hit is the longest and least controlled, and the
+    // blocked parry is the smallest because it is the outcome the player is
+    // being taught NOT to settle for.
+    [Export] public bool HapticsEnabled { get; set; } = true;
+
+    [Export] public float PerfectParryRumbleWeak { get; set; } = 0.5f;
+    [Export] public float PerfectParryRumbleStrong { get; set; } = 0.9f;
+    [Export] public float PerfectParryRumbleSeconds { get; set; } = 0.12f;
+
+    [Export] public float BlockedParryRumbleWeak { get; set; } = 0.4f;
+    [Export] public float BlockedParryRumbleStrong { get; set; } = 0.2f;
+    [Export] public float BlockedParryRumbleSeconds { get; set; } = 0.08f;
+
+    [Export] public float HurtRumbleWeak { get; set; } = 0.8f;
+    [Export] public float HurtRumbleStrong { get; set; } = 0.7f;
+    [Export] public float HurtRumbleSeconds { get; set; } = 0.20f;
+
+    [Export] public float ChargedSwingRumbleWeak { get; set; } = 0.4f;
+    [Export] public float ChargedSwingRumbleStrong { get; set; } = 0.8f;
+    [Export] public float ChargedSwingRumbleSeconds { get; set; } = 0.15f;
+
     [ExportGroup("Abilities")]
     // Default unlocks everything except ChargeAttack so this controller and
     // its test scene are fully exercisable standalone, before the World
@@ -163,16 +197,54 @@ public partial class PlayerController : CharacterBody3D, IDamageable
 
         AddToGroup("player");
 
+        ApplyMetaProgressionPerks();
+        CurrentHealth = MaxHealth;
+
         RecalculateJumpPhysics();
 
         if (EventBus.Instance != null)
+        {
             EventBus.Instance.AbilityUnlocked += OnAbilityUnlocked;
+            EventBus.Instance.RoomEntered += OnRoomEntered;
+            EventBus.Instance.EmbersChanged += OnEmbersChanged;
+        }
     }
 
     public override void _ExitTree()
     {
         if (EventBus.Instance != null)
+        {
             EventBus.Instance.AbilityUnlocked -= OnAbilityUnlocked;
+            EventBus.Instance.RoomEntered -= OnRoomEntered;
+            EventBus.Instance.EmbersChanged -= OnEmbersChanged;
+        }
+    }
+
+    private bool _parryHealUsedInRoom;
+
+    private void OnRoomEntered(int index, int total)
+    {
+        _parryHealUsedInRoom = false;
+    }
+
+    private void OnEmbersChanged(int total)
+    {
+        int prevMax = MaxHealth;
+        ApplyMetaProgressionPerks();
+        if (MaxHealth > prevMax)
+        {
+            CurrentHealth += (MaxHealth - prevMax);
+        }
+        CurrentHealth = Mathf.Min(CurrentHealth, MaxHealth);
+        BroadcastHealth();
+    }
+
+    private void ApplyMetaProgressionPerks()
+    {
+        if (Save.SaveManager.Instance?.GetWorldFlag("rune_vigor") == true)
+            MaxHealth = 120;
+        else
+            MaxHealth = 100;
     }
 
     private void OnAbilityUnlocked(int abilityBits)
@@ -195,6 +267,12 @@ public partial class PlayerController : CharacterBody3D, IDamageable
     public override void _PhysicsProcess(double delta)
     {
         var dt = (float)delta;
+
+        // Two float reads and a bool compare. It runs before the death branch
+        // on purpose: a charged swing that killed the player mid-release should
+        // still be felt, and a rumble the pad never receives is the one piece
+        // of feedback that cannot be caught up later.
+        TickChargedSwingHaptics();
 
         if (_isDead)
         {
@@ -537,8 +615,18 @@ public partial class PlayerController : CharacterBody3D, IDamageable
         {
             bool perfect = parry == Combat.CombatController.ParryResult.Perfect;
 
-            // Hit-stop freeze on parry: 120ms for perfect parry, 50ms for regular block
-            _combat?.TriggerHitStop(perfect ? 120 : 50);
+            // The two parry freezes, read from Combat rather than written here.
+            // They were literals in this file and exports in that one, which is
+            // two copies of the same tuning value and the usual way the two
+            // drift: retuning the export would have moved every hit-stop in the
+            // game EXCEPT the parry it was named after.
+            if (_combat != null)
+                _combat.TriggerHitStop(perfect ? _combat.PerfectParryHitStopMs
+                                               : _combat.BlockedParryHitStopMs);
+
+            Rumble(perfect ? PerfectParryRumbleWeak : BlockedParryRumbleWeak,
+                   perfect ? PerfectParryRumbleStrong : BlockedParryRumbleStrong,
+                   perfect ? PerfectParryRumbleSeconds : BlockedParryRumbleSeconds);
 
             // An ordinary parry still shoves: it costs ground, which is what
             // makes the perfect one worth aiming for.
@@ -550,6 +638,12 @@ public partial class PlayerController : CharacterBody3D, IDamageable
             }
 
             EventBus.Instance?.EmitParried(perfect, GlobalPosition);
+
+            if (perfect && !_parryHealUsedInRoom && Save.SaveManager.Instance?.GetWorldFlag("rune_parry_heal") == true)
+            {
+                _parryHealUsedInRoom = true;
+                Heal(6);
+            }
 
             // Gold for a perfect one, dull steel for an ordinary block. Parented
             // to the parent rather than to the player, so the burst stays where
@@ -616,6 +710,8 @@ public partial class PlayerController : CharacterBody3D, IDamageable
         velocity.Z = 0f;
         Velocity = velocity;
 
+        Rumble(HurtRumbleWeak, HurtRumbleStrong, HurtRumbleSeconds);
+
         _isDashing = false;
         _isHurt = true;
         _hurtStunTimer = HurtStunDuration;
@@ -643,6 +739,103 @@ public partial class PlayerController : CharacterBody3D, IDamageable
         EventBus.Instance?.EmitPlayerHealthChanged(CurrentHealth, MaxHealth);
 
     /// <summary>
+    /// Restores health without touching any other state. The Crucible's parry
+    /// economy is the only caller: inside that branch there is no passive
+    /// healing and a perfect parry is the sole way back up, so this is the
+    /// other half of a mechanic rather than a generic pickup path.
+    ///
+    /// Deliberately NOT routed through TakeDamage with a negative amount. That
+    /// would trip the invulnerability check, set the hurt state, apply
+    /// knockback and emit PlayerDamaged — four wrong things for a heal, and
+    /// the kind of clever reuse that reads as a bug six months later.
+    ///
+    /// Silent when dead: a corpse that heals is a respawn, and Respawn() is
+    /// the thing that does respawns.
+    /// </summary>
+    /// <summary>
+    /// One call, one place. Godot ignores it when no pad is attached, so the
+    /// only guard is the player's own switch -- and keeping every rumble in the
+    /// game behind a single method is what stops the four weights above from
+    /// becoming four sets of magic numbers scattered across three files.
+    /// </summary>
+    private void Rumble(float weak, float strong, float seconds)
+    {
+        if (!HapticsEnabled) return;
+        Input.StartJoyVibration(0, weak, strong, seconds);
+    }
+
+    private bool _wasChargedSwinging;
+
+    /// <summary>
+    /// The charged release, felt on the RISING edge of the swing.
+    ///
+    /// Detected here rather than fired from Combat because this class is where
+    /// the haptics table lives, and splitting it would put one of the four
+    /// weights in a different file from the other three. The edge is what
+    /// matters: IsSwinging is true for every frame of the swing, so rumbling on
+    /// the flag would restart the motors sixty times a second and the pad would
+    /// simply buzz.
+    /// </summary>
+    private void TickChargedSwingHaptics()
+    {
+        _combat ??= GetNodeOrNull<Combat.CombatController>("CombatController");
+        bool chargedSwing = _combat != null && _combat.IsSwinging && _combat.SwingIsCharged;
+        if (chargedSwing && !_wasChargedSwinging)
+            Rumble(ChargedSwingRumbleWeak, ChargedSwingRumbleStrong, ChargedSwingRumbleSeconds);
+        _wasChargedSwinging = chargedSwing;
+    }
+
+    public void Heal(int amount)
+    {
+        if (_isDead || amount <= 0) return;
+
+        int before = CurrentHealth;
+        CurrentHealth = Mathf.Min(MaxHealth, CurrentHealth + amount);
+        if (CurrentHealth == before) return;
+
+        BroadcastHealth();
+    }
+
+    /// <summary>
+    /// Environmental damage that bypasses the hurt reaction entirely: no stun,
+    /// no knockback, no state change, and — the part that matters — no
+    /// invulnerability check.
+    ///
+    /// The Crucible's slag floor ticks every 0.5s while
+    /// HurtInvulnerabilityDuration is 1.0s, so routing it through TakeDamage
+    /// would silently swallow every second tick and halve a rate the design
+    /// states explicitly. Standing in fire is a condition, not a blow, and the
+    /// mercy window exists to stop blows from chaining.
+    ///
+    /// It still emits PlayerDamaged, so the heat's "+4 on damage taken" and the
+    /// parry streak reset both see it, and it still ends the run at zero.
+    /// </summary>
+    public void ApplyBurn(int amount)
+    {
+        if (_isDead || amount <= 0) return;
+
+        CurrentHealth = Mathf.Max(0, CurrentHealth - amount);
+
+        var info = new DamageInfo
+        {
+            Amount = amount,
+            SourcePosition = GlobalPosition,
+            Knockback = Vector3.Zero,
+            IsCritical = false,
+            Telegraph = AttackTelegraphType.UnparryableRed,
+        };
+
+        EventBus.Instance?.EmitPlayerDamaged(info);
+        BroadcastHealth();
+
+        if (CurrentHealth <= 0)
+        {
+            _isDead = true;
+            EventBus.Instance?.EmitPlayerDied();
+        }
+    }
+
+    /// <summary>
     /// Fallback destination when nothing else knows where to put the player —
     /// where this controller started the level.
     /// </summary>
@@ -667,9 +860,11 @@ public partial class PlayerController : CharacterBody3D, IDamageable
         _isHurt = false;
         _hurtStunTimer = 0f;
         _hurtInvulnTimer = 0f;
+        ApplyMetaProgressionPerks();
         CurrentHealth = MaxHealth;
         Velocity = Vector3.Zero;
         CurrentState = MovementState.Idle;
+        _parryHealUsedInRoom = false;
         EventBus.Instance?.EmitPlayerHealthChanged(CurrentHealth, MaxHealth);
     }
 }

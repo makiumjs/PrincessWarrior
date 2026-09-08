@@ -57,6 +57,19 @@ public partial class SideScrollCamera : Camera3D
     /// a bigger version of stepping off a ledge.
     [Export] public float ParryShakeStrength = 0.22f;
 
+    /// Horizontal recoil, in metres of camera focus. The parry values were
+    /// literals inside OnParried; a blow taken had none at all, which left the
+    /// most violent thing that happens to the player as the only impact the
+    /// frame did not move for.
+    [Export] public float ParryPushPerfect { get; set; } = 0.35f;
+    [Export] public float ParryPushBlocked { get; set; } = 0.15f;
+    [Export] public float DamagePushStrength { get; set; } = 0.30f;
+
+    /// Harder than a parry, and it should be: a flashover is the room going
+    /// off, not a blow being turned aside. 0.35 against the parry's 0.22 is a
+    /// difference the player feels without having to be told there is one.
+    [Export] public float FlashoverShakeStrength = 0.35f;
+
     [ExportGroup("Dynamic Framing")]
     [Export] public float BaseOrthoSize { get; set; } = 10.5f;
     [Export] public float ArenaOrthoSize { get; set; } = 12.5f;
@@ -79,6 +92,8 @@ public partial class SideScrollCamera : Camera3D
             LostCrownlike.Core.EventBus.Instance.Landed += OnLanded;
             LostCrownlike.Core.EventBus.Instance.Parried += OnParried;
             LostCrownlike.Core.EventBus.Instance.BossStateChanged += OnBossStateChanged;
+            LostCrownlike.Core.EventBus.Instance.Flashover += OnFlashover;
+            LostCrownlike.Core.EventBus.Instance.PlayerDamaged += OnPlayerDamaged;
         }
     }
 
@@ -89,6 +104,8 @@ public partial class SideScrollCamera : Camera3D
             LostCrownlike.Core.EventBus.Instance.Landed -= OnLanded;
             LostCrownlike.Core.EventBus.Instance.Parried -= OnParried;
             LostCrownlike.Core.EventBus.Instance.BossStateChanged -= OnBossStateChanged;
+            LostCrownlike.Core.EventBus.Instance.Flashover -= OnFlashover;
+            LostCrownlike.Core.EventBus.Instance.PlayerDamaged -= OnPlayerDamaged;
         }
     }
 
@@ -101,6 +118,36 @@ public partial class SideScrollCamera : Camera3D
 
     private void OnLanded() => _shakeMagnitude = LandingShakeStrength;
 
+    /// The shake is the camera's, not the HUD's. Both listen to the same
+    /// signal and neither knows the other exists -- the HUD flashes the screen,
+    /// this moves it, and the one place that would have coupled them (a HUD
+    /// reaching for a Camera3D) never has to be written.
+    ///
+    /// Max, not assignment: a flashover during a landing must not come out
+    /// SMALLER than the landing did.
+    private void OnFlashover(Vector3 atPosition) =>
+        _shakeMagnitude = Mathf.Max(_shakeMagnitude, FlashoverShakeStrength);
+
+    /// <summary>
+    /// A blow taken shoves the frame the way the blow shoves the player: AWAY
+    /// from whatever hit them. The parry recoil goes the other way -- toward the
+    /// blade -- because a parry is the player holding their ground, and the two
+    /// reading differently is the point.
+    ///
+    /// Assigned rather than accumulated, and only when it is bigger: two hits
+    /// in the same second must not sum into a camera that slides off the level.
+    /// </summary>
+    private void OnPlayerDamaged(int amount, Vector3 sourcePosition, Vector3 knockback, bool isCritical)
+    {
+        if (Target == null || !IsInstanceValid(Target)) return;
+
+        float dir = Mathf.Sign(Target.GlobalPosition.X - sourcePosition.X);
+        if (dir == 0f) dir = -Target.FacingSign;
+
+        float push = dir * DamagePushStrength;
+        if (Mathf.Abs(push) > Mathf.Abs(_parryPushX)) _parryPushX = push;
+    }
+
     /// An ordinary parry gets a fraction of it. The two have to be told apart
     /// by feel as well as by ear, or the player never learns which one they
     /// just did -- and learning that is the whole skill.
@@ -109,7 +156,7 @@ public partial class SideScrollCamera : Camera3D
         _shakeMagnitude = perfect ? ParryShakeStrength : ParryShakeStrength * 0.35f;
         float pushDir = Target != null ? Mathf.Sign(Target.GlobalPosition.X - at.X) : 0f;
         if (pushDir == 0f && Target != null) pushDir = -Target.FacingSign;
-        _parryPushX = pushDir * (perfect ? 0.35f : 0.15f);
+        _parryPushX = pushDir * (perfect ? ParryPushPerfect : ParryPushBlocked);
     }
 
     public override void _Process(double delta)

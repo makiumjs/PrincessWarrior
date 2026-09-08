@@ -108,6 +108,10 @@ public partial class AudioManager : Node
         EventBus.Instance.RoomEntered += OnRoomEnteredForMusic;
         EventBus.Instance.RoomShape += OnRoomShape;
         EventBus.Instance.BossStateChanged += OnBossStateForMusic;
+        EventBus.Instance.AttackTelegraphed += OnAttackTelegraphed;
+        EventBus.Instance.HeatChanged += OnHeatChangedForWarning;
+        EventBus.Instance.PlayerHealthChanged += OnHealthForHeartbeat;
+        EventBus.Instance.PlayerDied += OnDiedForHeartbeat;
 
         _ambienceVoice = MakeExtraVoice("Ambience", AmbienceVolumeDb);
         _accentVoice = MakeExtraVoice("Accent", AmbienceVolumeDb + 4f);
@@ -151,6 +155,10 @@ public partial class AudioManager : Node
         EventBus.Instance.RoomEntered -= OnRoomEnteredForMusic;
         EventBus.Instance.RoomShape -= OnRoomShape;
         EventBus.Instance.BossStateChanged -= OnBossStateForMusic;
+        EventBus.Instance.AttackTelegraphed -= OnAttackTelegraphed;
+        EventBus.Instance.HeatChanged -= OnHeatChangedForWarning;
+        EventBus.Instance.PlayerHealthChanged -= OnHealthForHeartbeat;
+        EventBus.Instance.PlayerDied -= OnDiedForHeartbeat;
     }
 
     // ---- EventBus handlers -------------------------------------------------
@@ -446,6 +454,11 @@ public partial class AudioManager : Node
 
     public override void _Process(double delta)
     {
+        // Before the beds, because TickBeds reads the duck offset when it
+        // writes the volumes -- ticked afterwards it would apply one frame late,
+        // which on a 120ms effect is a tenth of its whole length.
+        TickDuck(delta);
+        TickWarnings(delta);
         TickAmbience(delta);
         TickMusic(delta);
         TickBeds(delta);
@@ -582,8 +595,9 @@ public partial class AudioManager : Node
 
         var up = _bedBIsActive ? _bedB : _bedA;
         var down = _bedBIsActive ? _bedA : _bedB;
-        up.VolumeDb = Mathf.Lerp(SilentDb, BedVolumeDb, (float)_bedFade);
-        down.VolumeDb = Mathf.Lerp(BedVolumeDb, SilentDb, (float)_bedFade);
+        float duck = DuckOffsetDb;
+        up.VolumeDb = Mathf.Lerp(SilentDb, BedVolumeDb, (float)_bedFade) + duck;
+        down.VolumeDb = Mathf.Lerp(BedVolumeDb, SilentDb, (float)_bedFade) + duck;
         if (_bedFade >= 1.0 && down.Playing) down.Stop();
 
         if (_layerWanted.Length > 0 && _layerWanted != _layerPlaying)
@@ -611,13 +625,172 @@ public partial class AudioManager : Node
 
         var lUp = _layerBIsActive ? _layerB : _layerA;
         var lDown = _layerBIsActive ? _layerA : _layerB;
-        lUp.VolumeDb = Mathf.Lerp(SilentDb, LayerVolumeDb, (float)_layerFade);
-        lDown.VolumeDb = Mathf.Lerp(LayerVolumeDb, SilentDb, (float)_layerFade);
+        lUp.VolumeDb = Mathf.Lerp(SilentDb, LayerVolumeDb, (float)_layerFade) + duck;
+        lDown.VolumeDb = Mathf.Lerp(LayerVolumeDb, SilentDb, (float)_layerFade) + duck;
         if (_layerFade >= 1.0 && lDown.Playing) lDown.Stop();
     }
 
     /// -60 dB rather than 0 linear: VolumeDb is logarithmic, and lerping to
     /// float.NegativeInfinity produces NaN the moment it is multiplied.
+    // -- Ducking under a perfect parry --------------------------------------
+    //
+    // The hit-stop already stops the world for 120ms; this empties the air
+    // underneath it. Pulling the bed and the layer down for the length of the
+    // freeze isolates the clang, and letting them back up afterwards is what
+    // makes the moment read as a held breath rather than as a dropout.
+    //
+    // Applied as an OFFSET folded into the volume the mixer already writes
+    // every frame, not as a second writer: the bed crossfade assigns VolumeDb
+    // unconditionally, so anything setting the level from outside that loop
+    // would be overwritten on the next frame and the duck would flicker.
+    //
+    // SFX are untouched on purpose. The whole point is the clang, and ducking
+    // the channel the clang is on would be ducking the thing being isolated.
+
+    [Export] public float ParryDuckDb { get; set; } = -4f;
+
+    /// Held for the length of the perfect-parry freeze, then released. Kept in
+    /// step with CombatController.PerfectParryHitStopMs by hand rather than by
+    /// reference: Audio holds no compile-time dependency on Combat, and one
+    /// number in two files is the smaller price.
+    [Export] public float ParryDuckHoldSeconds { get; set; } = 0.12f;
+
+    [Export] public float ParryDuckReleaseSeconds { get; set; } = 0.22f;
+
+    private float _duckHold;
+    private float _duckLevel;   // 0 = open, 1 = fully ducked
+
+    /// The offset every background voice is written with. Zero when nothing is
+    /// ducking, which is almost always.
+    private float DuckOffsetDb => _duckLevel * ParryDuckDb;
+
+    /// Public so a check can assert the duck happened without listening to
+    /// anything: "the bed got quieter" is a fact about a number.
+    public float CurrentDuckDb => DuckOffsetDb;
+
+    /// <summary>
+    /// Advanced with UNSCALED time. The duck exists to sit underneath a
+    /// hit-stop, and a hit-stop is Engine.TimeScale at 0.05 -- fed the scaled
+    /// delta this timer would run twenty times too slowly and the music would
+    /// stay down for two and a half seconds after a parry.
+    /// </summary>
+    private void TickDuck(double delta)
+    {
+        float dt = (float)delta / Mathf.Max(0.0001f, (float)Engine.TimeScale);
+
+        if (_duckHold > 0f)
+        {
+            _duckHold = Mathf.Max(0f, _duckHold - dt);
+            _duckLevel = 1f;
+            return;
+        }
+
+        if (_duckLevel > 0f)
+            _duckLevel = Mathf.MoveToward(_duckLevel, 0f, dt / Mathf.Max(0.01f, ParryDuckReleaseSeconds));
+    }
+
+    // ---- Warnings: the room is about to go off, and so are you -------------
+    //
+    // Two cues that are not events but STATES. Everything else in this file
+    // fires once when something happens; these repeat while a condition holds,
+    // and stop the moment it does not.
+    //
+    // Both are driven from bus signals alone -- HeatChanged and
+    // PlayerHealthChanged -- so this file never asks the world anything. And
+    // both allocate only when a beat actually fires: the tick itself is two
+    // float subtractions, so a run spent above 25% health with a cold room
+    // hands the collector nothing at all.
+
+    /// Matched to the HUD's 3Hz pre-flashover pulse. The ear and the eye are
+    /// reporting the same fact and should do it on the same beat, or the two
+    /// read as two separate problems.
+    [Export] public float HeatSizzleIntervalSeconds { get; set; } = 0.333f;
+
+    /// Where the heat alarm starts, as a fraction of the bar. The same 0.90 the
+    /// HUD uses; kept as an export here rather than shared, because Audio holds
+    /// no compile-time dependency on UI or World.
+    [Export] public float HeatAlarmAt { get; set; } = 0.90f;
+
+    /// About 1.2Hz. Slow, and slower than a real pulse on purpose: a fast one
+    /// reads as panic and this has to be legible under a fight.
+    [Export] public float HeartbeatIntervalSeconds { get; set; } = 0.833f;
+
+    [Export] public float LowHealthFraction { get; set; } = 0.25f;
+
+    private float _heat01;
+    private bool _heatFlashover;
+    private float _heatSizzleTimer;
+
+    private float _healthFraction = 1f;
+    private bool _playerAlive = true;
+    private float _heartbeatTimer;
+
+    private void OnHeatChangedForWarning(float heat01, int state)
+    {
+        _heat01 = heat01;
+        _heatFlashover = state == (int)HeatState.Flashover;
+    }
+
+    private void OnHealthForHeartbeat(int current, int max)
+    {
+        _healthFraction = max <= 0 ? 1f : Mathf.Clamp(current / (float)max, 0f, 1f);
+        // A heal back over the line stops the beat, and a respawn restores full
+        // health through this same signal -- so nothing has to remember to
+        // switch it off.
+        if (_healthFraction > LowHealthFraction) _heartbeatTimer = 0f;
+        if (current > 0) _playerAlive = true;
+    }
+
+    private void OnDiedForHeartbeat() => _playerAlive = false;
+
+    /// <summary>
+    /// Advanced with UNSCALED time, like the duck and for the same reason: a
+    /// hit-stop is Engine.TimeScale at 0.05, and a warning fed the scaled delta
+    /// would stall for the length of every freeze -- which is exactly when the
+    /// player most needs to know the room is about to go off.
+    /// </summary>
+    private void TickWarnings(double delta)
+    {
+        float dt = (float)delta / Mathf.Max(0.0001f, (float)Engine.TimeScale);
+
+        bool heatAlarm = _heatFlashover || _heat01 >= HeatAlarmAt;
+        if (heatAlarm)
+        {
+            _heatSizzleTimer -= dt;
+            if (_heatSizzleTimer <= 0f)
+            {
+                _heatSizzleTimer = HeatSizzleIntervalSeconds;
+                // A short hiss rather than a tone: the floor is about to catch,
+                // and fire is broadband. It also puts this cue at the far end
+                // of the palette from the gold bell, so an alarm can never be
+                // mistaken for an opening.
+                Emit(GenerateNoiseBurst(duration: 0.09f, decay: 22f, amplitude: 0.34f), "HeatSizzle");
+            }
+        }
+        else
+        {
+            _heatSizzleTimer = 0f;
+        }
+
+        bool lowHealth = _playerAlive && _healthFraction > 0f && _healthFraction <= LowHealthFraction;
+        if (lowHealth)
+        {
+            _heartbeatTimer -= dt;
+            if (_heartbeatTimer <= 0f)
+            {
+                _heartbeatTimer = HeartbeatIntervalSeconds;
+                // 60Hz and nothing else. It sits below every other cue in the
+                // game, so it never competes with the fight -- it is felt more
+                // than heard, which is what a heartbeat should be.
+                Emit(GenerateThud(startFreq: 60f, endFreq: 42f, duration: 0.13f), "Heartbeat");
+            }
+        }
+        else
+        {
+            _heartbeatTimer = 0f;
+        }
+    }
+
     private const float SilentDb = -60f;
 
     private AudioStreamPlayer MakeBedVoice(string name)
@@ -635,6 +808,12 @@ public partial class AudioManager : Node
             return;
         }
 
+        // The air goes out from under it. Set before the clang is emitted so the
+        // bed is already down on the frame the sound starts rather than
+        // arriving a frame into it.
+        _duckHold = ParryDuckHoldSeconds;
+        _duckLevel = 1f;
+
         var clash = GenerateClick(duration: 0.14f, decay: 14f, toneFreq: 520f, noiseMix: 0.35f);
         var ring = GenerateRisingBlip(startFreq: 900f, endFreq: 1750f, duration: 0.14f);
         var mixed = new float[clash.Length];
@@ -648,11 +827,103 @@ public partial class AudioManager : Node
         Emit(mixed, "PerfectParried");
     }
 
-    private void OnEnemyDamaged(Node3D enemy, int amount, Vector3 sourcePosition, Vector3 knockback, bool isCritical) =>
-        // Tone-dominant (20/80), inverse mix from PlayerDamaged, so the two are
-        // distinguishable by texture (gritty vs. sharp/ringing), not just by the
-        // underlying tone frequency buried under noise.
-        Emit(GenerateClick(duration: 0.05f, decay: 40f, toneFreq: 900f, noiseMix: 0.2f), "EnemyDamaged");
+    // ---- The impact hierarchy ----------------------------------------------
+    //
+    // One 900Hz click for every blow in the game meant a jab, a fully charged
+    // overhead and a sword bouncing off plate armour all sounded the same. The
+    // last of those is the expensive one: a player who cannot HEAR that their
+    // blade was turned has no reason to stop swinging, and the armour rule is
+    // the one the whole Warden fight rests on.
+    //
+    // Classified by AMOUNT, because amount is all the bus carries. EnemyDamaged
+    // is flattened to primitives and has no telegraph and no "was this
+    // absorbed" flag, and widening it for one listener would push a combat
+    // detail into every call site that deals damage. The damage values are far
+    // enough apart to be read directly: chip is 1-3, a light is 10-14, a heavy
+    // 25-27, a charged 55-65.
+
+    /// At or under this, the blade was turned rather than landed. The Warden,
+    /// the Sentinel, the Forgemaster and the Slagbound all chip at 1-3.
+    [Export] public int AbsorbedDamageCeiling { get; set; } = 3;
+
+    /// Light attacks land 10-14 with the per-combo-step bonus.
+    [Export] public int LightDamageCeiling { get; set; } = 18;
+
+    /// Heavies land 25-27. Anything past this is a released charge.
+    [Export] public int HeavyDamageCeiling { get; set; } = 40;
+
+    private void OnEnemyDamaged(Node3D enemy, int amount, Vector3 sourcePosition, Vector3 knockback, bool isCritical)
+    {
+        if (amount <= AbsorbedDamageCeiling)
+        {
+            // TINK. Bright, tiny, and with no body at all -- the sound of a
+            // sword skidding off plate. It is deliberately the least satisfying
+            // noise in the game: the player should want it to stop.
+            //
+            // Measured against the whole palette before being chosen, because
+            // this exact call is what the sound-separation check exercises: it
+            // emits EnemyDamaged with Amount = 1, which lands here. At 45ms /
+            // 2391Hz / 0.108 it clears every other cue on at least one axis.
+            Emit(GenerateClick(duration: 0.045f, decay: 60f, toneFreq: 2400f, noiseMix: 0.05f), "EnemyDamaged");
+            return;
+        }
+
+        if (amount <= LightDamageCeiling)
+        {
+            // A cut: short, bright, mostly tone. Tone-dominant is the inverse
+            // of PlayerDamaged's gritty mix, so taking a hit and landing one
+            // are told apart by texture rather than by pitch.
+            Emit(GenerateClick(duration: 0.04f, decay: 45f, toneFreq: 1100f, noiseMix: 0.25f), "EnemyDamaged");
+            return;
+        }
+
+        if (amount <= HeavyDamageCeiling)
+        {
+            // A blow. Lower, longer, and left to ring -- the slow decay is what
+            // reads as metal rather than as a louder click.
+            Emit(GenerateClick(duration: 0.08f, decay: 18f, toneFreq: 450f, noiseMix: 0.30f), "EnemyDamaged");
+            return;
+        }
+
+        // A released charge. The only impact in the game with real bass under
+        // it, which is the point: it is the most damaging thing the player owns
+        // and nothing else should sound like it.
+        Emit(GeneratePunch(startFreq: 120f, endFreq: 60f, duration: 0.12f, decay: 16f, noiseAmount: 0.30f), "EnemyDamaged");
+    }
+
+    /// <summary>
+    /// The three attack channels, as sound.
+    ///
+    /// This is the pass that lets the player fight without looking at the
+    /// enemy: gold says "punish this", red says "get out of the way", and the
+    /// two are as far apart as two cues in this game can be -- a bright bell
+    /// against a low growl.
+    ///
+    /// White is SILENT, and deliberately. Every ordinary strike in the game is
+    /// white; a cue on all of them would be a rattle under the entire fight and
+    /// would bury the two that carry information. The absence is the message.
+    /// </summary>
+    private void OnAttackTelegraphed(Node3D enemy, int type)
+    {
+        switch ((AttackTelegraphType)type)
+        {
+            case AttackTelegraphType.CounterGold:
+                // Two partials a fifth apart, swept up. One tone reads as a
+                // beep; two read as struck metal, which is what a counterable
+                // attack is announcing.
+                Emit(GenerateBell(startFreq: 1400f, endFreq: 2200f, duration: 0.16f, partialRatio: 1.5f),
+                     "TelegraphGold");
+                break;
+
+            case AttackTelegraphType.UnparryableRed:
+                // Down, not up, and dirty. Every other cue in this game rises;
+                // this one falls, which is the fastest way to say "not that" to
+                // a player who has learned the gold bell.
+                Emit(GenerateRisingBlip(startFreq: 160f, endFreq: 75f, duration: 0.20f, noiseMix: 0.35f),
+                     "TelegraphRed");
+                break;
+        }
+    }
 
     // ---- Waveform synthesis -------------------------------------------------
 
@@ -703,6 +974,56 @@ public partial class AudioManager : Node
             phase += 2.0 * Math.PI * freq / MixRate;
             float envelope = Mathf.Exp(-8f * t);
             buf[i] = Mathf.Clamp((float)Math.Sin(phase) * envelope * 0.7f, -1f, 1f);
+        }
+        return buf;
+    }
+
+    /// <summary>
+    /// Two sine partials a fixed ratio apart, swept together under a bell
+    /// envelope. A single tone reads as a beep; two read as struck metal, and
+    /// the gold channel has to sound like a bell being hit rather than like a
+    /// notification.
+    ///
+    /// The envelope is the blip's sin(pi*t) raised to 0.7, which opens faster
+    /// and hangs longer -- a bell's attack is immediate and its tail is the
+    /// part you hear.
+    /// </summary>
+    private float[] GenerateBell(float startFreq, float endFreq, float duration, float partialRatio)
+    {
+        int n = (int)(MixRate * duration);
+        var buf = new float[n];
+        double p1 = 0.0, p2 = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / n;
+            float freq = Mathf.Lerp(startFreq, endFreq, t);
+            p1 += 2.0 * Math.PI * freq / MixRate;
+            p2 += 2.0 * Math.PI * freq * partialRatio / MixRate;
+            float envelope = Mathf.Pow(Mathf.Sin(Mathf.Pi * t), 0.7f);
+            float tone = (float)Math.Sin(p1) * 0.62f + (float)Math.Sin(p2) * 0.38f;
+            buf[i] = Mathf.Clamp(tone * envelope * 0.55f, -1f, 1f);
+        }
+        return buf;
+    }
+
+    /// <summary>
+    /// A low sine drop with grit on it and a percussive decay. Thud with a
+    /// noise component: the difference between a landing (pure tone) and a
+    /// charged sword hitting a body (tone plus impact debris).
+    /// </summary>
+    private float[] GeneratePunch(float startFreq, float endFreq, float duration, float decay, float noiseAmount)
+    {
+        int n = (int)(MixRate * duration);
+        var buf = new float[n];
+        double phase = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / n;
+            phase += 2.0 * Math.PI * Mathf.Lerp(startFreq, endFreq, t) / MixRate;
+            float envelope = Mathf.Exp(-decay * t);
+            float noise = (float)(_rng.NextDouble() * 2.0 - 1.0);
+            float body = (float)Math.Sin(phase) * (1f - noiseAmount) + noise * noiseAmount;
+            buf[i] = Mathf.Clamp(body * envelope * 0.8f, -1f, 1f);
         }
         return buf;
     }

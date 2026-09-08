@@ -1,0 +1,29 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/AI/Forgemaster.cs" id="1_script"]
+[ext_resource type="Script" path="res://src/AI/EnemyVisual.cs" id="2_visual"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
+radius = 0.58
+height = 2.3
+
+[node name="Forgemaster" type="CharacterBody3D"]
+script = ExtResource("1_script")
+VisualRootPath = NodePath("VisualRoot")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 0)
+shape = SubResource("CapsuleShape3D_1")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+transform = Transform3D(1.45, 0, 0, 0, 1.45, 0, 0, 0, 1.45, 0, 0, 0)
+
+[node name="Visual" type="Node3D" parent="VisualRoot"]
+script = ExtResource("2_visual")
+CharacterScene = "res://assets/kaykit/characters/Skeleton_Warrior.glb"
+WeaponScene = "res://assets/kaykit/props/axe_1handed.gltf"
+OffhandScene = "res://assets/kaykit/props/shield_round.gltf"
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.2
+target_desired_distance = 0.3

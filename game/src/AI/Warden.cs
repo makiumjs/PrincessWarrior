@@ -79,6 +79,7 @@ public partial class Warden : EnemyController
         StaggerDuration = 1.6f;
         ParryStaggerRadius = 4.0f;
         SteerDeadzone = 0.3f;
+        EmberBounty = 50;
     }
 
     /// Armour. Note what this does NOT do: it never returns 0. A boss that is

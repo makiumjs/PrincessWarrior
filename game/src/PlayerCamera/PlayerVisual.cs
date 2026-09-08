@@ -34,7 +34,12 @@ public partial class PlayerVisual : Node3D
     /// KayKit rigs expose dedicated "handslot.r" / "handslot.l" bones for
     /// props — attaching there instead of the hand bone keeps the weapon from
     /// intersecting the fist geometry.
-    [Export] public string WeaponScene = "res://assets/kaykit/props/dagger.gltf";
+    /// The princess carries a sword, not a dagger. The dagger was a placeholder
+    /// from the first blockout and it has been quietly defining the character
+    /// ever since: a 140-degree swing arc, a 25-damage heavy and a charged
+    /// overhead all read wrong on a knife, and the slash trail added in the
+    /// juice pass has nothing to trace along.
+    [Export] public string WeaponScene = "res://assets/kaykit/props/sword_1handed.gltf";
     [Export] public string WeaponBone = "handslot.r";
     [Export] public string OffhandScene = "";
     [Export] public string OffhandBone = "handslot.l";
@@ -51,13 +56,22 @@ public partial class PlayerVisual : Node3D
     private Node3D _modelRoot;
     private Combat.CombatController _combat;
 
+    /// One trail, built once and reused for every swing. See SlashTrail for why
+    /// it is pooled rather than spawned.
+    private Combat.SlashTrail _slashTrail;
+    private bool _wasSwinging;
+
     /// How far the weapon travels through a swing, degrees.
+    /// Blade finish. 0.85 metallic against the kit's near-zero is what makes
+    /// the torches land on the edge; 0.22 roughness keeps the highlight tight
+    /// enough to travel as the arm moves instead of washing the whole face.
+    [Export] public float BladeMetallic { get; set; } = 0.85f;
+    [Export] public float BladeRoughness { get; set; } = 0.22f;
+
     [Export] public float SwingArcDegrees = 140f;
 
     /// How far the whole model leans into a heavy swing, degrees.
     [Export] public float SwingLeanDegrees = 7f;
-    private string _current = "";
-
     private float _parrySuccessTimer;
     private bool _parrySuccessIsPerfect;
     private int _lastComboStep = -1;
@@ -243,6 +257,16 @@ public partial class PlayerVisual : Node3D
     {
         _parrySuccessTimer = 0.28f;
         _parrySuccessIsPerfect = perfect;
+
+        // Parented to the ROOM, not to the player: an effect that rides the
+        // character reads as attached to them rather than as having happened at
+        // a place, and the parry happened where the blades met. A room teardown
+        // then takes it along, which is the same rule the impact bursts follow.
+        //
+        // Folded into the handler this class already had rather than added as a
+        // second subscription to the same signal: two handlers is two things to
+        // unsubscribe, and this file has exactly one _ExitTree.
+        Combat.ClashRing.Spawn(_player?.GetParent() ?? GetParent(), atPosition, perfect);
     }
 
     public override void _Process(double delta)
@@ -351,6 +375,21 @@ public partial class PlayerVisual : Node3D
 
         // 3. Attack swing: Slash_A drives the body bones; procedural code drives the weapon pivot & glow
         bool swinging = _combat != null && _combat.IsSwinging;
+
+        // Fired on the RISING edge only. IsSwinging is true for every frame of
+        // the swing, so firing on the flag would restart the trail sixty times a
+        // second and it would never fade -- a solid arc welded to the blade
+        // rather than an afterimage left behind it.
+        if (swinging && !_wasSwinging)
+        {
+            EnsureSlashTrail();
+            _slashTrail?.Fire(
+                _combat.SwingIsCharged ? Combat.SlashTrail.Weight.Charged
+              : _combat.SwingIsHeavy ? Combat.SlashTrail.Weight.Heavy
+              : Combat.SlashTrail.Weight.Light);
+        }
+        _wasSwinging = swinging;
+
         if (swinging)
         {
             _swingReleaseTimer = 0.25f;
@@ -383,6 +422,26 @@ public partial class PlayerVisual : Node3D
             _modelRoot.RotationDegrees = new Vector3(Mathf.Lerp(_modelRoot.RotationDegrees.X, 0f, 12f * delta), _modelRoot.RotationDegrees.Y, _modelRoot.RotationDegrees.Z);
 
         SetWeaponGlow(new Color(1f, 1f, 1f), 0f);
+    }
+
+    /// <summary>
+    /// Builds the one trail this visual will ever use, on the pivot the weapon
+    /// already swings on, so it inherits the blade's motion for free rather
+    /// than trying to track a bone transform only the AnimationPlayer really
+    /// knows.
+    ///
+    /// Lazy rather than done in _Ready: the pivot is created by AttachProp,
+    /// which runs during _Ready, and a builder that assumed the order would
+    /// break the day the props moved. Runs once -- every later swing finds the
+    /// trail already there.
+    /// </summary>
+    private void EnsureSlashTrail()
+    {
+        if (_slashTrail != null && IsInstanceValid(_slashTrail)) return;
+        if (_swingPivot == null) return;
+
+        _slashTrail = new Combat.SlashTrail { Name = "SlashTrail" };
+        _swingPivot.AddChild(_slashTrail);
     }
 
     /// Lights the blade. Found by BONE rather than by node name: Godot forbids
@@ -541,8 +600,54 @@ public partial class PlayerVisual : Node3D
         // free KayKit pack ships none.
         var pivot = new Node3D { Name = "SwingPivot" };
         attachment.AddChild(pivot);
-        pivot.AddChild(propScene.Instantiate<Node3D>());
-        if (boneName == WeaponBone) _swingPivot = pivot;
+        var prop = propScene.Instantiate<Node3D>();
+        pivot.AddChild(prop);
+
+        if (boneName == WeaponBone)
+        {
+            _swingPivot = pivot;
+            PolishBlade(prop);
+        }
+    }
+
+    /// <summary>
+    /// Makes the blade read as metal.
+    ///
+    /// The KayKit props ship with a flat, mostly-diffuse material because they
+    /// are built to be readable at any lighting setup. This game lights its
+    /// rooms with flickering torches, and a blade that does not take a
+    /// specular highlight sits in the frame as another piece of kit geometry --
+    /// the exact complaint the visual-fidelity score has been carrying.
+    ///
+    /// Applied as a surface OVERRIDE on the mesh instance rather than by
+    /// editing the imported material: the .gltf's material is a shared imported
+    /// resource, and writing to it would re-tint every other copy of that
+    /// sword in the project, including any an enemy is holding.
+    ///
+    /// Runs once, at attach time. Nothing here touches _Process.
+    /// </summary>
+    private void PolishBlade(Node from)
+    {
+        if (from is MeshInstance3D mi && mi.Mesh != null)
+        {
+            for (int surface = 0; surface < mi.Mesh.GetSurfaceCount(); surface++)
+            {
+                // Duplicated per surface so the override owns its material and
+                // the imported one is left alone.
+                if (mi.Mesh.SurfaceGetMaterial(surface) is not StandardMaterial3D src) continue;
+
+                var polished = (StandardMaterial3D)src.Duplicate();
+                polished.Metallic = BladeMetallic;
+                polished.Roughness = BladeRoughness;
+                // Sharpens the highlight rather than brightening the whole
+                // blade: a torch should travel along the edge as the player
+                // turns, which is what sells it as steel.
+                polished.MetallicSpecular = 0.62f;
+                mi.SetSurfaceOverrideMaterial(surface, polished);
+            }
+        }
+
+        foreach (var child in from.GetChildren()) PolishBlade(child);
     }
 
     private static AnimationPlayer FindAnimationPlayer(Node node)

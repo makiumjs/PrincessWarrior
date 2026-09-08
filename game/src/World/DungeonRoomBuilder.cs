@@ -249,7 +249,7 @@ public partial class DungeonRoomBuilder : Node3D
         metrics.VerifyAgainst(GetTree()?.GetFirstNodeInGroup("player"));
 
         var composer = string.IsNullOrEmpty(ChunkUnderTest)
-            ? ComposeRoom(metrics, RoomIndex, RunLength)
+            ? ComposeRoom(metrics, RoomIndex, RunLength, IsCrucibleRoom)
             : ComposeSingleChunk(metrics, ChunkUnderTest);
 
         LastComposedRects = composer.Rects;
@@ -339,6 +339,7 @@ public partial class DungeonRoomBuilder : Node3D
             yield return () => BuildBackdrop(composer.MinY, composer.MaxY,
                                              from, Mathf.Min(from + BackdropColumnsPerStep, columns));
         }
+        yield return () => PlaceBiomeMotes();
         yield return () => SpawnEncounters(composer);
         yield return () => SpawnCheckpoints(composer);
         yield return () => SpawnArenaGates(composer);
@@ -449,7 +450,7 @@ public partial class DungeonRoomBuilder : Node3D
         return LayoutBags[(k / 3) % LayoutBags.Length][k % 3];
     }
 
-    private static MicroChunkComposer ComposeRoom(PlayerMetrics m, int index, int total)
+    private static MicroChunkComposer ComposeRoom(PlayerMetrics m, int index, int total, bool crucible = false)
     {
         // Ramp: the opening room runs at 55% obstacle size and grows from
         // there, so the first gap teaches the jump instead of executing the
@@ -478,12 +479,85 @@ public partial class DungeonRoomBuilder : Node3D
         // run is a stairwell with a fight at the top. This is short, flat and
         // wide: you walk in, the door seals behind you, and the room is the
         // fight.
+        // The Crucible answers before any of the run's own rules do. It has its
+        // own difficulty, its own two layouts, and it deliberately ignores
+        // IsSecondHalf: that split sorts rooms by which VERBS they ask for, and
+        // this branch's progression is heat rather than vocabulary.
+        if (crucible)
+        {
+            c.Difficulty = CrucibleDifficulty;
+            return index >= CrucibleLastRoom ? CrucibleLayoutB(c) : CrucibleLayoutA(c);
+        }
+
         if (index == total - 1) return BossLayout(c, index);
 
         return IsSecondHalf(index, total)
             ? LateLayout(c, index, LayoutFor(index, total))
             : EarlyLayout(c, index, LayoutFor(index, total));
     }
+
+    /// <summary>
+    /// "La Colata" — room 4 of the Crucible. Seventeen chunks in three
+    /// movements, like every other room in the game, and four Arenas where an
+    /// ordinary room has one.
+    ///
+    /// Flat on purpose. The Catacombs ask where you are; this asks when you
+    /// press, and a room that also asked the player to climb would be asking
+    /// two questions at once while a timer ran. The only height in it is the
+    /// Chasm near the end, which is there so the last arena is entered from
+    /// above rather than walked into.
+    ///
+    /// The Latch is doing two jobs. It is the barrier it has always been, and
+    /// inside this branch its lever is also a slag vent worth -25 heat --
+    /// HeatManager treats any lever thrown in the Crucible as one. A chunk that
+    /// already asks the player to ACT on the level rather than cross it is the
+    /// right place to put the branch's only non-renewable resource.
+    /// </summary>
+    private static MicroChunkComposer CrucibleLayoutA(MicroChunkComposer c) =>
+        // The pour: the room states its terms.
+        c.Add(ChunkKind.Gauntlet, 0.7f)
+         .Add(ChunkKind.Arena)
+         .Add(ChunkKind.Spikes)
+         .Add(ChunkKind.Gauntlet)
+         .Add(ChunkKind.Current)
+         .Add(ChunkKind.Drop)
+
+        // The pressure: a vent, and two arenas either side of it.
+         .Add(ChunkKind.Arena)
+         .Add(ChunkKind.Sweep)
+         .Add(ChunkKind.Gauntlet)
+         .Add(ChunkKind.Latch)
+         .Add(ChunkKind.Gap, 0.9f)
+         .Add(ChunkKind.Arena)
+
+        // The run home.
+         .Add(ChunkKind.Gauntlet)
+         .Add(ChunkKind.Spikes)
+         .Add(ChunkKind.Chasm, 0.85f)
+         .Add(ChunkKind.Arena)
+         .Add(ChunkKind.Gauntlet);
+
+    /// <summary>
+    /// "La Fucina" — room 5, and the Forgemaster's.
+    ///
+    /// Five Gauntlets and nothing else. The composer lays each as an 8-metre
+    /// rect starting where the last one ended, so this is forty metres of
+    /// unbroken flat floor: short, flat and wide, the shape BossLayout already
+    /// established for a room that IS the fight rather than a road to it. The
+    /// design asks for at least 22 metres of arena and this is comfortably past
+    /// it, measured rather than asserted -- SpawnCrucibleBoss prints the span it
+    /// actually found.
+    ///
+    /// No Arena chunk, deliberately. An Arena would drop a barrier in the
+    /// middle of the boss's floor, and the room already seals: it is the
+    /// halfway room, so its exit is SealedUntilBossDies.
+    /// </summary>
+    private static MicroChunkComposer CrucibleLayoutB(MicroChunkComposer c) =>
+        c.Add(ChunkKind.Gauntlet, 0.7f)
+         .Add(ChunkKind.Gauntlet)
+         .Add(ChunkKind.Gauntlet)
+         .Add(ChunkKind.Gauntlet)
+         .Add(ChunkKind.Gauntlet);
 
     private static MicroChunkComposer BossLayout(MicroChunkComposer c, int index) =>
         c.Add(ChunkKind.Gauntlet, 0.7f)
@@ -712,11 +786,13 @@ public partial class DungeonRoomBuilder : Node3D
         // Upper terrace portal: Crucible (elite combat, amber-red)
         if (RoomIndex == 3)
         {
-            exit.DestinationActName = "Catacombs";
-            exit.CustomPortalColor = new Color(0.2f, 0.85f, 0.8f);
-
             float terraceY = last.Y + 4.5f;
             float terraceX = last.X + last.Width - 10f;
+
+            exit.DestinationActName = "Catacombs";
+            exit.CustomPortalColor = new Color(0.2f, 0.85f, 0.8f);
+            exit.Position = new Vector3(terraceX - 2.5f, last.Y + 1.2f, 0f);
+
             PlacePlatform(new PlatformRect(terraceX, terraceY, 8f));
             PlaceClimbableWall(new WallRect(terraceX - 0.4f, last.Y, terraceY - last.Y));
 
@@ -734,6 +810,38 @@ public partial class DungeonRoomBuilder : Node3D
                 Shape = new BoxShape3D { Size = new Vector3(1.5f, 3.5f, 2f) },
             });
             AddChild(forkExit);
+
+            // Once the branch has been beaten, it stops asking to be qualified
+            // for. The terrace climb is a filter -- prove the movement kit
+            // before you are allowed into the room that punishes not having it
+            // -- and a filter you have already passed is just a wall.
+            //
+            // The same precedent as the Act II shortcut: a WorldFlag written in
+            // one run opens a door in the next, and the door is a portal that
+            // was always there rather than a new kind of thing.
+            if (Save.SaveManager.Instance != null
+                && Save.SaveManager.Instance.GetWorldFlag(HeatManager.FlagCleared))
+            {
+                float lowPlatformY = last.Y + 2.2f;
+                float lowPlatformX = terraceX - 3.5f;
+                PlacePlatform(new PlatformRect(lowPlatformX, lowPlatformY, 3.0f));
+
+                var groundCrucible = new RoomExitTrigger
+                {
+                    Name = "RoomExit_CrucibleGround",
+                    NextRoomIndex = CrucibleFirstRoom,
+                    RunLength = RunLength,
+                    DestinationActName = "Crucible",
+                    CustomPortalColor = new Color(1f, 0.35f, 0.15f),
+                    Position = new Vector3(lowPlatformX + 1.5f, lowPlatformY + 1.2f, 0f),
+                };
+                groundCrucible.AddChild(new CollisionShape3D
+                {
+                    Shape = new BoxShape3D { Size = new Vector3(1.5f, 2.0f, 2f) },
+                });
+                AddChild(groundCrucible);
+                GD.Print("[Room] crucible_cleared: the Crucible is open from the low landing");
+            }
         }
 
         // 2. Persistent Shortcut Gateway in Room 0:
@@ -755,6 +863,17 @@ public partial class DungeonRoomBuilder : Node3D
             });
             AddChild(shortcutExit);
         }
+
+        // 3. Meta-Progression: Runestone Shrine in Room 0 (The Camp)
+        if (RoomIndex == 0)
+        {
+            var shrine = new RunestoneShrine
+            {
+                Name = "RunestoneShrine",
+                Position = new Vector3(3.8f, 0f, 0f),
+            };
+            AddChild(shrine);
+        }
     }
 
     /// Drops each ability pickup in front of the obstacle that needs it.
@@ -765,6 +884,20 @@ public partial class DungeonRoomBuilder : Node3D
     /// died would have nothing to respawn to.
     private void SpawnCheckpoints(MicroChunkComposer composer)
     {
+        // The Crucible's entry toll. One shrine at the mouth of room 4 and none
+        // after it, so dying in the branch costs the branch rather than the last
+        // chunk -- and none at all in the Fucina, which is a sealed boss room
+        // like the Sentinel's and has never had one.
+        //
+        // Not zero in room 4: with no checkpoint anywhere, a death would send
+        // the player back to whatever shrine room 3 last recorded, which is on
+        // the other side of a choice they already made.
+        if (IsCrucibleRoom)
+        {
+            SpawnCrucibleCheckpoint(composer);
+            return;
+        }
+
         int i = 0;
         foreach (var point in composer.EncounterPoints)
         {
@@ -789,6 +922,16 @@ public partial class DungeonRoomBuilder : Node3D
     private void SpawnEncounters(MicroChunkComposer composer)
     {
         if (!SpawnEnemies) return;
+
+        // The Crucible does not use the run's type cycle. That cycle exists so
+        // consecutive rooms open with different enemies over a ten-room run;
+        // this branch is two rooms with four encounters, and each one is
+        // composed rather than dealt.
+        if (IsCrucibleRoom)
+        {
+            SpawnCrucibleEncounters(composer);
+            return;
+        }
 
         var meleeScene = GD.Load<PackedScene>("res://scenes/enemies/BasicMelee.tscn");
         if (meleeScene == null)
@@ -869,6 +1012,258 @@ public partial class DungeonRoomBuilder : Node3D
         }
     }
 
+    // -- The Crucible: composed encounters ---------------------------------
+
+    /// <summary>
+    /// Four arenas, four written encounters. The rest of the run deals its
+    /// enemies from a rotation because a ten-room run cannot be hand-placed and
+    /// stay tunable; this branch is two rooms, and every fight in it is a
+    /// specific answer to a specific question, so it is written down.
+    ///
+    /// The composition is deterministic and identical on every run. Several
+    /// gate checks assert what a room contains, and a coin flip would make them
+    /// flaky -- the same reason the ordinary cycle is a modulo and not an RNG.
+    /// </summary>
+    private void SpawnCrucibleEncounters(MicroChunkComposer composer)
+    {
+        // The floor first, and for BOTH rooms. The slag rule is invisible
+        // without it: at Molten the ground costs health after two seconds, and
+        // a rule the player can feel but not see reads as the game being
+        // broken -- the finding that put arrows on the conveyor floors.
+        PlaceSlagVeins(composer);
+
+        if (RoomIndex >= CrucibleLastRoom)
+        {
+            SpawnCrucibleBoss(composer);
+            return;
+        }
+
+        // Geometry first: every arena needs a face to wall-slide on before it
+        // holds a fight, because at Molten the floor burns and the slag timer
+        // only resets in the air.
+        PlaceCrucibleArenaWalls(composer);
+
+        var slagbound = GD.Load<PackedScene>("res://scenes/enemies/Slagbound.tscn");
+        var emberwright = GD.Load<PackedScene>("res://scenes/enemies/Emberwright.tscn");
+        var emberhusk = GD.Load<PackedScene>("res://scenes/enemies/Emberhusk.tscn");
+
+        if (slagbound == null || emberwright == null || emberhusk == null)
+        {
+            GD.PrintErr("DungeonRoomBuilder: a Crucible enemy scene is missing; the branch has no encounters");
+            return;
+        }
+
+        // Arena 1: one Slagbound and two husks -- the branch's thesis stated in
+        //          its simplest form. Learn the shell, and learn that killing a
+        //          husk next to you is your own fault.
+        // Arena 2: the first Emberwright. From here the room has a clock, and
+        //          the two husks are what stands between the player and it.
+        // Arena 3: no husks at all. A Slagbound and an Emberwright, which is a
+        //          choice with no filler in it: cool the room or open the shell.
+        // Arena 4: three husks around a Slagbound, on ground entered from above
+        //          via the Chasm. The most crowded floor in the branch, and the
+        //          one where the parry's 1.4x knockback is worth the most.
+        var arenas = composer.Arenas;
+        for (int i = 0; i < arenas.Count; i++)
+        {
+            var (x0, x1, y) = arenas[i];
+            float centre = (x0 + x1) * 0.5f;
+            float ground = y + 0.5f;
+
+            switch (i)
+            {
+                case 0:
+                    PlaceEnemy(slagbound, new Vector3(centre + 1.0f, ground, 0f));
+                    PlaceEnemy(emberhusk, new Vector3(centre - 2.6f, ground, 0f));
+                    PlaceEnemy(emberhusk, new Vector3(centre + 3.4f, ground, 0f));
+                    break;
+
+                case 1:
+                    // The wright at the far edge: it never moves, so the whole
+                    // encounter is the ground between it and the door.
+                    PlaceEnemy(emberwright, new Vector3(x1 - 1.6f, ground, 0f));
+                    PlaceEnemy(emberhusk, new Vector3(centre - 2.2f, ground, 0f));
+                    PlaceEnemy(emberhusk, new Vector3(centre + 1.4f, ground, 0f));
+                    break;
+
+                case 2:
+                    PlaceEnemy(slagbound, new Vector3(centre - 1.4f, ground, 0f));
+                    PlaceEnemy(emberwright, new Vector3(x1 - 1.6f, ground, 0f));
+                    break;
+
+                default:
+                    PlaceEnemy(slagbound, new Vector3(centre + 1.2f, ground, 0f));
+                    PlaceEnemy(emberhusk, new Vector3(centre - 3.0f, ground, 0f));
+                    PlaceEnemy(emberhusk, new Vector3(centre - 0.6f, ground, 0f));
+                    PlaceEnemy(emberhusk, new Vector3(centre + 3.6f, ground, 0f));
+                    break;
+            }
+        }
+
+        GD.Print($"[Crucible] room {RoomIndex}: {arenas.Count} arenas composed");
+    }
+
+    /// <summary>
+    /// The Forgemaster, two slag vents and the wave spawner.
+    ///
+    /// Same spawn path as every other boss on purpose: it is in the "boss"
+    /// group, its exit is sealed until it dies, and everything that looks for a
+    /// boss finds it. A second, parallel way of being a boss is exactly what
+    /// this project has deleted twice.
+    /// </summary>
+    private void SpawnCrucibleBoss(MicroChunkComposer composer)
+    {
+        var scene = GD.Load<PackedScene>("res://scenes/enemies/Forgemaster.tscn");
+        if (scene == null)
+        {
+            GD.PrintErr("DungeonRoomBuilder: Forgemaster.tscn not found; the Fucina has no boss");
+            return;
+        }
+
+        var (x0, x1, y) = WidestFlatRun(composer);
+        float width = x1 - x0;
+        float centre = (x0 + x1) * 0.5f;
+
+        var boss = scene.Instantiate<Node3D>();
+        AddChild(boss);
+        // Past centre, toward the exit, so the player walks in with room behind
+        // them: a boss met with your back to the door is a boss you cannot give
+        // ground to, and giving ground is how you reach the vents.
+        boss.GlobalPosition = new Vector3(centre + width * 0.15f, y + 1.2f, 0f);
+
+        if (boss is AI.EnemyController forgemaster)
+            forgemaster.SetPatrolPoints(boss.GlobalPosition + new Vector3(-width * 0.25f, 0f, 0f),
+                                        boss.GlobalPosition + new Vector3(width * 0.2f, 0f, 0f));
+
+        SpawnCrucibleVents(x0, x1, y);
+
+        // The husks come in from the ends, outside the boss's 2.1m reach, so a
+        // wave never arrives already inside a sweep.
+        var waves = new CrucibleWaveSpawner
+        {
+            Name = "CrucibleWaves",
+            LeftSpawn = new Vector3(x0 + 2.0f, y + 0.5f, 0f),
+            RightSpawn = new Vector3(x1 - 2.0f, y + 0.5f, 0f),
+        };
+        AddChild(waves);
+
+        GD.Print($"[Crucible] Forgemaster at x={boss.GlobalPosition.X:0.0} on a {width:0.0}m contiguous arena");
+    }
+
+    /// <summary>
+    /// Two levers at the ends of the Fucina, and nothing else: a vent is a
+    /// valve, not a door, so there is no LatchGate paired with them.
+    ///
+    /// HeatManager already treats any lever thrown inside the branch as a vent
+    /// worth -25, deduped by position, so this needs no new plumbing and no new
+    /// signal. Placed at opposite ends because reaching one has to COST ground
+    /// -- fifty points of heat within arm's reach would not be a decision.
+    /// </summary>
+    private void SpawnCrucibleVents(float x0, float x1, float y)
+    {
+        AddChild(new LeverSwitch
+        {
+            Name = "SlagVentLeft",
+            Position = new Vector3(x0 + 3.0f, y + 0.9f, 0f),
+            PersistentWorldFlag = "",
+        });
+
+        AddChild(new LeverSwitch
+        {
+            Name = "SlagVentRight",
+            Position = new Vector3(x1 - 3.0f, y + 0.9f, 0f),
+            PersistentWorldFlag = "",
+        });
+    }
+
+    /// <summary>
+    /// A climbable face at each end of every Crucible arena.
+    ///
+    /// At Molten the floor burns after two seconds and the timer only resets in
+    /// the air, so an arena with nothing to wall-slide on is a tax rather than a
+    /// question. Wall jump is the least-used ability in the game and this is the
+    /// room that asks for it under pressure -- but only if there is a surface.
+    ///
+    /// The panels start one full course ABOVE the floor. A wall running down to
+    /// the ground would seal the corridor the moment the arena gate opened, and
+    /// the arena has to be walked out of. At 2.4m the clearance underneath
+    /// clears PlayerMetrics.MinHeadroom, the face is inside a single jump, and
+    /// the collider is exactly one WallHeight so the visual course and the box
+    /// are the same object rather than one poking through the other.
+    /// </summary>
+    private void PlaceCrucibleArenaWalls(MicroChunkComposer composer)
+    {
+        const float baseOffset = 2.4f;   // > MinHeadroom (PlayerHeight + 0.5)
+        const float inset = 1.2f;        // the arena gate sits at x1 - 0.4; the
+                                         // 0.8m-wide panel ends at x1 - 0.8,
+                                         // so they never share space
+
+        foreach (var (x0, x1, y) in composer.Arenas)
+        {
+            PlaceClimbableWall(new WallRect(x0 + inset, y + baseOffset, WallHeight));
+            PlaceClimbableWall(new WallRect(x1 - inset, y + baseOffset, WallHeight));
+        }
+    }
+
+    /// <summary>
+    /// The air of the room: embers in the Crucible, damp motes everywhere else.
+    ///
+    /// ONE node, parented here, so a rebuild frees it along with the geometry.
+    /// That is not incidental -- the node-leak check counts nodes across twelve
+    /// consecutive rebuilds, and this effect is deliberately a single
+    /// MultiMeshInstance3D rather than forty MeshInstance3Ds precisely so it
+    /// costs the count one node per room instead of forty.
+    ///
+    /// Placed for EVERY room, because the complaint the visual score keeps
+    /// carrying is not "the Crucible looks empty", it is that the air does.
+    /// </summary>
+    private void PlaceBiomeMotes()
+    {
+        var motes = new BiomeMotes { Name = "BiomeMotes" };
+        AddChild(motes);
+        motes.Configure(IsCrucibleRoom ? BiomeMotes.Mood.Ember : BiomeMotes.Mood.Damp);
+    }
+
+    /// <summary>
+    /// The Crucible's lit floor: one emissive skin over every walkable rect,
+    /// all of them sharing a single material so following the heat costs one
+    /// write a frame rather than forty.
+    ///
+    /// Over the rects rather than replacing the floor tiles. The tiles are
+    /// batched kit geometry and re-tinting them per frame would mean unpicking
+    /// the batching that made a rebuild affordable in the first place.
+    /// </summary>
+    private void PlaceSlagVeins(MicroChunkComposer composer)
+    {
+        var veins = new SlagVeins { Name = "SlagVeins" };
+        AddChild(veins);
+
+        foreach (var r in composer.Rects)
+            veins.AddSpan(r.X, r.X + r.Width, r.Y);
+
+        GD.Print($"[Crucible] slag veins over {veins.SpanCount} spans");
+    }
+
+    /// One shrine, at the first flat ground of the Colata. See SpawnCheckpoints
+    /// for why it is one and not none.
+    private void SpawnCrucibleCheckpoint(MicroChunkComposer composer)
+    {
+        if (RoomIndex >= CrucibleLastRoom) return;      // the Fucina has none
+        if (composer.EncounterPoints.Count == 0) return;
+
+        var trigger = new CheckpointTrigger
+        {
+            Name = "Checkpoint_0",
+            CheckpointId = "shrine_crucible",
+            Position = composer.EncounterPoints[0] + new Vector3(-3f, 0.5f, 0f),
+        };
+        trigger.AddChild(new CollisionShape3D
+        {
+            Shape = new BoxShape3D { Size = new Vector3(1.5f, 3f, 2f) },
+        });
+        AddChild(trigger);
+    }
+
     /// One enemy, positioned and told where its beat is.
     private void PlaceEnemy(PackedScene scene, Vector3 point)
     {
@@ -885,6 +1280,81 @@ public partial class DungeonRoomBuilder : Node3D
         if (enemy is AI.EnemyController controller)
             controller.SetPatrolPoints(point + new Vector3(-3f, 0f, 0f),
                                        point + new Vector3(3f, 0f, 0f));
+    }
+
+    // -- The Crucible ------------------------------------------------------
+
+    /// First and last room of the alternate branch. The Catacombs path builds
+    /// these two rooms from the ordinary layouts; the Crucible replaces both,
+    /// and room 6 is identical on either path.
+    public const int CrucibleFirstRoom = 4;
+    public const int CrucibleLastRoom = 5;
+
+    /// Fixed, and not the run's ramp. The ramp exists so the opening room does
+    /// not execute a player who has no practice yet; a branch you have to climb
+    /// a terrace to reach is not anybody's opening room. 0.85 rather than 1.0
+    /// because the Crucible's pressure is the heat, and obstacles at full size
+    /// on top of it would be two difficulties stacked.
+    public const float CrucibleDifficulty = 0.85f;
+
+    /// <summary>
+    /// Whether THIS room is being built as part of the Crucible.
+    ///
+    /// Asked of the heat manager rather than stored on the builder, because the
+    /// branch is chosen at a door in room 3 and the builder is destroyed and
+    /// recreated on every transition -- a flag here would have to be threaded
+    /// through the rebuild that erases it. HeatManager is an autoload and
+    /// already knows, having armed itself on BranchEntered.
+    ///
+    /// The room-index bound is what ends the branch cleanly: HeatManager only
+    /// deactivates when RoomEntered fires, which is the LAST step of a build,
+    /// so room 6 would still see an active manager while it was being composed.
+    /// Room 6 is outside the range, so it composes as itself.
+    /// </summary>
+    public bool IsCrucibleRoom =>
+        HeatManager.Instance != null
+        && HeatManager.Instance.Active
+        && RoomIndex >= CrucibleFirstRoom
+        && RoomIndex <= CrucibleLastRoom;
+
+    /// The Fucina's boss stands on the widest CONTIGUOUS run of flat floor, not
+    /// on the widest single rect. The composer lays a Gauntlet as an 8-metre
+    /// rect and five of them in a row are 40 metres of unbroken ground, but
+    /// they are five rects -- and the ordinary boss placement, which takes the
+    /// largest one, would put the Forgemaster on an eighth of its own arena.
+    private static (float X0, float X1, float Y) WidestFlatRun(MicroChunkComposer composer)
+    {
+        var rects = composer.Rects;
+        if (rects.Count == 0) return (0f, 0f, 0f);
+
+        float bestX0 = rects[0].X, bestX1 = rects[0].X + rects[0].Width, bestY = rects[0].Y;
+        float runX0 = bestX0, runX1 = bestX1, runY = bestY;
+
+        for (int i = 1; i < rects.Count; i++)
+        {
+            var r = rects[i];
+            bool joins = Mathf.Abs(r.Y - runY) < 0.01f && Mathf.Abs(r.X - runX1) < 0.01f;
+
+            if (joins)
+            {
+                runX1 = r.X + r.Width;
+            }
+            else
+            {
+                runX0 = r.X;
+                runX1 = r.X + r.Width;
+                runY = r.Y;
+            }
+
+            if (runX1 - runX0 > bestX1 - bestX0)
+            {
+                bestX0 = runX0;
+                bestX1 = runX1;
+                bestY = runY;
+            }
+        }
+
+        return (bestX0, bestX1, bestY);
     }
 
     /// The last room of the run. A property rather than a literal because

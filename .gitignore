@@ -32,3 +32,8 @@ game/docs/critic-captures/
 # Throwaway patch scripts. They exist for one edit and are deleted after;
 # one slipped into a commit before this line did.
 game/_*.py
+
+# Temporary scratch & API dumps
+Claude outputs/
+extension_api.json
+/*.jpg

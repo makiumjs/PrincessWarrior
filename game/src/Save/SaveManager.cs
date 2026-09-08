@@ -242,13 +242,41 @@ public partial class SaveManager : Node
         Persist();
     }
 
-    /// Starts a fresh save. Without this a completed run left RunCompleted true
-    /// on disk, so the next session began already finished.
+    public void AddEmbers(int amount)
+    {
+        if (Current == null || amount <= 0) return;
+        Current.TotalEmbers += amount;
+        Persist();
+        EventBus.Instance?.EmitEmbersChanged(Current.TotalEmbers);
+    }
+
+    public bool TrySpendEmbers(int amount)
+    {
+        if (Current == null || amount <= 0 || Current.TotalEmbers < amount)
+            return false;
+        Current.TotalEmbers -= amount;
+        Persist();
+        EventBus.Instance?.EmitEmbersChanged(Current.TotalEmbers);
+        return true;
+    }
+
+    /// Starts a fresh save while preserving meta-progression (flags, embers, lifetime stats).
     public void ResetSave()
     {
-        Current = new SaveData();
+        var flags = Current?.WorldFlags ?? new();
+        int embers = Current?.TotalEmbers ?? 0;
+        int runs = (Current?.TotalRunsAttempted ?? 0) + 1;
+        int slain = Current?.TotalEnemiesSlain ?? 0;
+
+        Current = new SaveData
+        {
+            WorldFlags = flags,
+            TotalEmbers = embers,
+            TotalRunsAttempted = runs,
+            TotalEnemiesSlain = slain,
+        };
         Persist();
-        GD.Print("SaveManager: save reset for a new run.");
+        GD.Print("SaveManager: save reset for a new run (meta-progression preserved).");
     }
 
     private void Persist()

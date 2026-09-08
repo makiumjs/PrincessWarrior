@@ -34,6 +34,7 @@ public partial class Sentinel : Warden
         // Never enrages: EnrageAt is a fraction of health, and 0 is a fraction
         // the health bar cannot reach.
         EnrageAt = 0f;
+        EmberBounty = 10;
     }
 
     private int _sentinelAttackSeq;

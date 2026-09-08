@@ -298,6 +298,21 @@ public partial class RoomExitTrigger : Area3D
             return;
         }
 
+        // A named destination is a BRANCH, and something has to say so out
+        // loud: the two portals at the end of room 3 differ by a string and a
+        // colour, and until now nothing downstream could tell which one the
+        // player walked through. Emitted before the transition request, so a
+        // listener that arms itself for the branch is ready before the room
+        // it is arming for exists.
+        //
+        // Empty destinations stay silent. An ordinary room exit is not a fork,
+        // and a signal that fired on every door would mean nothing.
+        if (!string.IsNullOrEmpty(DestinationActName))
+        {
+            GD.Print($"[Exit] branch taken: {DestinationActName}");
+            EventBus.Instance?.EmitBranchEntered(DestinationActName);
+        }
+
         GD.Print($"[Exit] entering room {NextRoomIndex}");
         EventBus.Instance?.EmitLevelTransitionRequested($"generated:{NextRoomIndex}", "start");
 

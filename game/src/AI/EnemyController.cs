@@ -51,6 +51,7 @@ public partial class EnemyController : CharacterBody3D, IDamageable
     [Export] public float PatrolPointArriveThreshold = 0.3f;
     [Export] public float SteerDeadzone = 0.05f;
     [Export] public AttackTelegraphType CurrentTelegraph { get; set; } = AttackTelegraphType.StandardWhite;
+    [Export] public int EmberBounty { get; set; } = 4;
 
     /// <summary>Optional explicit patrol endpoints. If either is unset, the
     /// enemy falls back to +/-3 units on X from its spawn position.</summary>
@@ -97,7 +98,10 @@ public partial class EnemyController : CharacterBody3D, IDamageable
     public override void _Ready()
     {
         if (Core.EventBus.Instance != null)
+        {
             Core.EventBus.Instance.Parried += OnParried;
+            Core.EventBus.Instance.HeatChanged += OnHeatChanged;
+        }
 
         Health = MaxHealth;
         _lockedZ = GlobalPosition.Z;
@@ -404,7 +408,7 @@ public partial class EnemyController : CharacterBody3D, IDamageable
 
         if (_stateTimer >= AttackWindupTime + AttackRecoveryTime)
         {
-            _attackCooldownRemaining = AttackCooldown;
+            _attackCooldownRemaining = AttackCooldown * Core.HeatRules.CooldownScale(_heatState);
             if (player == null || DistanceToPlayerXY(player) > LoseSightRadius)
                 TransitionTo(EnemyState.Patrol);
             else
@@ -470,7 +474,10 @@ public partial class EnemyController : CharacterBody3D, IDamageable
     public override void _ExitTree()
     {
         if (Core.EventBus.Instance != null)
+        {
             Core.EventBus.Instance.Parried -= OnParried;
+            Core.EventBus.Instance.HeatChanged -= OnHeatChanged;
+        }
     }
 
     private void OnParried(bool perfect, Vector3 at)
@@ -571,6 +578,9 @@ public partial class EnemyController : CharacterBody3D, IDamageable
         Velocity = new Vector3(_pendingKnockback.X, Mathf.Max(0f, _pendingKnockback.Y), 0f);
         CollisionLayer = 0;
         CollisionMask = 0;
+        Save.SaveManager.Instance?.AddEmbers(EmberBounty);
+        if (Save.SaveManager.Instance?.Current != null)
+            Save.SaveManager.Instance.Current.TotalEnemiesSlain++;
         EventBus.Instance?.EmitEnemyDied(this);
     }
 
@@ -585,12 +595,78 @@ public partial class EnemyController : CharacterBody3D, IDamageable
             SetNavTarget(_headingToB ? _patrolTargetB : _patrolTargetA);
 
         if (next == EnemyState.Attack)
+        {
+            AttackSequence++;
             SelectAttackTelegraph();
+
+            // The room has the last word on which channel this swing carries.
+            // Applied AFTER the type has chosen, so a Slagbound's third beat is
+            // still its third beat and the heat only ever pushes it further up
+            // the ladder -- never down, and never past Red.
+            if (AcceptsHeatPromotion)
+                CurrentTelegraph = Core.HeatRules.Promote(CurrentTelegraph, _heatState, AttackSequence);
+
+            // Announced AFTER the promotion, never before: the room has the
+            // last word on which channel this swing carries, and a cue that
+            // named the type's own choice would tell the player to parry a
+            // strike the heat had already turned red.
+            //
+            // At the start of the wind-up, which is the whole value of a
+            // telegraph -- the tell is the time the player is being given, and
+            // a sound at the moment of the blow is a report rather than a
+            // warning.
+            Core.EventBus.Instance?.EmitAttackTelegraphed(this, CurrentTelegraph);
+        }
 
         State = next;
         _stateTimer = 0f;
         _attackDamageApplied = false;
     }
+
+    /// <summary>
+    /// The room's heat, as last broadcast. Cached from the signal rather than
+    /// read off HeatManager, because AI reaching into World for a value would
+    /// be a new exception to the one rule this architecture has -- subsystems
+    /// speak through the bus. Outside the Crucible the manager never emits, so
+    /// this stays Tempered and every rule below is the identity.
+    /// </summary>
+    private Core.HeatState _heatState = Core.HeatState.Tempered;
+    private float _heat01;
+
+    private void OnHeatChanged(float heat01, int state)
+    {
+        _heat01 = heat01;
+        _heatState = (Core.HeatState)state;
+    }
+
+    /// The room's heat state and its 0..1 fill, for a subclass that has to look
+    /// like the room it is standing in. Read-only: an enemy reacts to the heat,
+    /// it does not set it.
+    protected Core.HeatState RoomHeatState => _heatState;
+    protected float RoomHeat01 => _heat01;
+
+    /// <summary>
+    /// How many attacks this enemy has begun. Incremented once, where the
+    /// attack state is entered, so every type shares one counter instead of
+    /// each keeping a private one -- the Warden and the Sentinel each grew
+    /// their own, and the heat's "every second attack" rule needed a third.
+    /// Protected so a subclass can read the beat it is on.
+    /// </summary>
+    protected int AttackSequence { get; private set; }
+
+    /// <summary>
+    /// Whether the room's heat may push this type's telegraph up the channel
+    /// ladder. True for everything, and it has to be: the promotion is the
+    /// Crucible's main effect, and a roster that opted out one type at a time
+    /// would turn a room-wide rule into a list of exceptions.
+    ///
+    /// It exists for the one case where promotion would delete the type. An
+    /// enemy whose ONLY counterplay is the gold channel becomes unanswerable
+    /// the moment gold is promoted to red -- and if that enemy is also the one
+    /// raising the heat, it spends the fight making itself immune. That is not
+    /// difficulty, it is a type erasing its own design.
+    /// </summary>
+    protected virtual bool AcceptsHeatPromotion => true;
 
     /// <summary>
     /// Chooses the telegraph type for the upcoming attack. Virtual so bosses/subclasses

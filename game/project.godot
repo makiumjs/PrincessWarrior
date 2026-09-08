@@ -20,6 +20,7 @@ config/icon="res://icon.svg"
 EventBus="*res://src/Core/EventBus.cs"
 AudioManager="*res://src/Audio/AudioManager.cs"
 SaveManager="*res://src/Save/SaveManager.cs"
+HeatManager="*res://src/World/HeatManager.cs"
 
 [dotnet]
 

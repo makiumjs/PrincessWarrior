@@ -29,4 +29,15 @@ public partial class SaveData : Resource
     /// further away every time the player died.
     [Export] public int RoomsCleared;
     [Export] public bool RunCompleted;
+
+    /// <summary>
+    /// Persistent meta-currency collected from defeated foes across all runs.
+    /// </summary>
+    [Export] public int TotalEmbers { get; set; } = 0;
+
+    /// <summary>
+    /// Meta-progression lifetime statistics.
+    /// </summary>
+    [Export] public int TotalRunsAttempted { get; set; } = 0;
+    [Export] public int TotalEnemiesSlain { get; set; } = 0;
 }

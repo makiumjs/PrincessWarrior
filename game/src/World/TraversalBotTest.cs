@@ -51,6 +51,7 @@ public partial class TraversalBotTest : Node
     /// difficulty; that number is measured and reported rather than asserted,
     /// because a failure there says as much about the bot as about the level.
     [Export] public int RoomsToTest = 3;
+    [Export] public int StartRoom = 0;
 
     private int _roomUnderTest;
     private int _roomStartFrame;
@@ -106,7 +107,7 @@ public partial class TraversalBotTest : Node
             };
         }
 
-        if (_f == 10) BeginRoom(0);
+        if (_f == 10) BeginRoom(StartRoom);
 
         if (_f < 10) return;
 
@@ -114,7 +115,15 @@ public partial class TraversalBotTest : Node
 
         float x = _player.GlobalPosition.X;
         _maxY = Mathf.Max(_maxY, _player.GlobalPosition.Y);
-        if (x > _furthestX + 0.05f) { _furthestX = x; _stuckFrames = 0; }
+        if (x < _furthestX - 5.0f)
+        {
+            // Player respawned at a checkpoint or fell back: reset tracking and stall latch
+            _furthestX = x;
+            _stuckFrames = 0;
+            _reportedStall = false;
+            _climbing = false;
+        }
+        else if (x > _furthestX + 0.05f) { _furthestX = x; _stuckFrames = 0; _reportedStall = false; }
         else _stuckFrames++;
 
         // Report WHERE it stalls and with what, once. "The bot got 84%" is not
@@ -182,15 +191,10 @@ public partial class TraversalBotTest : Node
                      $"onFloor={_player.IsOnFloor()} hp={(int)_player.Get("CurrentHealth")} " +
                      $"nearestEnemy={NearestEnemyDistance(_player.GlobalPosition):F1}");
 
-        // Per-room budget, proportional to the room. A flat 1600 frames was
-        // right while a room was 64 metres; the rooms are now about 200, and a
-        // flat budget cut five of six rooms off between 92% and 99% -- which
-        // reads as "the level is impassable" and means "the stopwatch was
-        // short". Room 0 crossed 202 metres in 1452 frames, so 7.2 frames per
-        // metre is the measured rate; 22 is three times that, because the bot
-        // is clumsy on purpose and the question is whether a room CAN be
-        // crossed, not how quickly.
-        int budget = 900 + Mathf.RoundToInt(Mathf.Abs(_exitX - _startX) * 22f);
+        // Per-room budget, proportional to the room. 30 frames per metre allows
+        // sufficient headroom for a clumsy bot that falls into a pit and has
+        // to walk back from a checkpoint.
+        int budget = 900 + Mathf.RoundToInt(Mathf.Abs(_exitX - _startX) * 30f);
         int elapsed = _f - _roomStartFrame;
         if (_reachedExit || elapsed > budget)
         {
@@ -207,7 +211,7 @@ public partial class TraversalBotTest : Node
                 GD.Print($"[BOT]   stuck at ({_player.GlobalPosition.X:F1}, {_player.GlobalPosition.Y:F1}) " +
                          $"abilities={(AbilityFlags)(int)_player.Get("UnlockedAbilities")}");
 
-            int last = ChunksToTest.Length > 0 ? ChunksToTest.Length - 1 : RoomsToTest - 1;
+            int last = ChunksToTest.Length > 0 ? ChunksToTest.Length - 1 : StartRoom + RoomsToTest - 1;
             if (_roomUnderTest < last)
             {
                 BeginRoom(_roomUnderTest + 1);
@@ -258,16 +262,8 @@ public partial class TraversalBotTest : Node
             Ray(space, pos + new Vector3(_metrics.SafeDashGap, 0.6f, 0f), new Vector3(0f, -2.5f, 0f))
          || Ray(space, pos + new Vector3(_metrics.SafeDashGap * 0.75f, 0.6f, 0f), new Vector3(0f, -2.5f, 0f));
 
-        bool needDash = !floorAhead && !floorAtJumpRange && landingAtDashRange;
-
-        // Is there a ledge overhead, within a jump? A chimney is ledges rather
-        // than walls, so none of the forward probes see it: floorAhead is true
-        // and wallAhead is false at its foot, and the bot has no reason to do
-        // anything but walk. It cleared the chimney in rooms 0-2 only because
-        // the difficulty ramp makes those steps 0.83 units; at the saturated
-        // 1.5 it walked away from the shaft holding right and climbed 0.1 of
-        // the 3.7 it needed.
         bool ledgeAbove = Ray(space, pos + new Vector3(0f, 0.9f, 0f), new Vector3(0f, _metrics.MaxJumpUp, 0f));
+        bool needDash = !floorAhead && !floorAtJumpRange && landingAtDashRange && !ledgeAbove && _player.Velocity.Y <= 0f;
         bool wantClimbStraightUp = ledgeAbove && _stuckFrames > 40;
 
         // Climb latch. Gating on the X-stall alone is self-defeating: the first
@@ -374,9 +370,11 @@ public partial class TraversalBotTest : Node
             _dashes++;
         }
 
-        // Swing at whatever is in reach. Without this the bot walked into the
-        // first enemy and pushed against it for the rest of the run.
-        if (NearestEnemyDistance(pos) is var d && d >= 0f && d < 1.8f)
+        // Swing at whatever is in reach (enemies, unthrown levers, or if stuck against a barrier).
+        // Without this the bot walked into the first enemy or lever and pushed against it.
+        float nearestTarget = NearestEnemyDistance(pos);
+        bool shouldSwing = (nearestTarget >= 0f && nearestTarget < 2.2f) || (_stuckFrames > 25 && wallAhead);
+        if (shouldSwing)
         {
             if (_attackHeld && _f >= _lastAttackFrame + 4)
             {
@@ -398,9 +396,11 @@ public partial class TraversalBotTest : Node
         float best = -1f;
         foreach (var e in FindEnemies(_room))
         {
-            // Full distance, not |dx|. Measuring X alone reported an enemy
-            // standing on a ledge overhead as "0.28 units away".
-            float d = e.GlobalPosition.DistanceTo(from);
+            float dx = e.GlobalPosition.X - from.X;
+            float dy = e.GlobalPosition.Y - from.Y;
+            // A lever stands on the floor while player origin is at waist height (~0.9m higher)
+            if (e is LeverSwitch) dy = Mathf.Max(0f, Mathf.Abs(dy) - 0.9f);
+            float d = Mathf.Sqrt(dx * dx + dy * dy);
             if (best < 0f || d < best) best = d;
         }
         return best;
@@ -409,7 +409,8 @@ public partial class TraversalBotTest : Node
     private static System.Collections.Generic.List<Node3D> FindEnemies(Node from)
     {
         var found = new System.Collections.Generic.List<Node3D>();
-        if (from is AI.EnemyController e) found.Add(e);
+        if (from is AI.EnemyController e && e.State != AI.EnemyController.EnemyState.Dead) found.Add(e);
+        if (from is LeverSwitch l && !l.IsThrown) found.Add(l);
         foreach (var c in from.GetChildren()) found.AddRange(FindEnemies(c));
         return found;
     }
