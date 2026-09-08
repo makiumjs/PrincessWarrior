@@ -15,16 +15,8 @@ namespace LostCrownlike.PlayerCamera;
 /// </summary>
 public partial class PlayerVisual : Node3D
 {
-    [Export] public string CharacterScene = "res://assets/quaternius/characters/Female_Ranger.gltf";
-    [Export] public string[] AnimationScenes = System.Array.Empty<string>();
-
-    private static readonly string[] DefaultQuaterniusAnimScenes =
-    {
-        "res://assets/quaternius/animations/UAL1_Standard.glb",
-        "res://assets/quaternius/animations/UAL2_Standard.glb",
-    };
-
-    private static readonly string[] DefaultKayKitAnimScenes =
+    [Export] public string CharacterScene = "res://assets/kaykit/characters/Rogue.glb";
+    [Export] public string[] AnimationScenes =
     {
         "res://assets/kaykit/animations/Rig_Medium_MovementBasic.glb",
         "res://assets/kaykit/animations/Rig_Medium_General.glb",
@@ -34,17 +26,23 @@ public partial class PlayerVisual : Node3D
     /// Blend time between clips, seconds. Keeps state flips from popping.
     [Export] public float CrossFade = 0.12f;
 
-    /// The models face +Z, but gameplay runs along X (PlayerController
+    /// The KayKit models face +Z, but gameplay runs along X (PlayerController
     /// flips facing by rotating the body's Y between 0 and 180). Without this
     /// offset the character sprints sideways, looking straight at the camera.
     [Export] public float ModelYawOffsetDegrees = 90f;
 
     /// KayKit rigs expose dedicated "handslot.r" / "handslot.l" bones for
-    /// props; Quaternius humanoid rigs expose "hand_r" / "hand_l".
+    /// props — attaching there instead of the hand bone keeps the weapon from
+    /// intersecting the fist geometry.
+    /// The princess carries a sword, not a dagger. The dagger was a placeholder
+    /// from the first blockout and it has been quietly defining the character
+    /// ever since: a 140-degree swing arc, a 25-damage heavy and a charged
+    /// overhead all read wrong on a knife, and the slash trail added in the
+    /// juice pass has nothing to trace along.
     [Export] public string WeaponScene = "res://assets/kaykit/props/sword_1handed.gltf";
-    [Export] public string WeaponBone = "hand_r";
+    [Export] public string WeaponBone = "handslot.r";
     [Export] public string OffhandScene = "";
-    [Export] public string OffhandBone = "hand_l";
+    [Export] public string OffhandBone = "handslot.l";
 
 
     private PlayerController _player;
@@ -57,7 +55,6 @@ public partial class PlayerVisual : Node3D
     private Quaternion _restUpperArm = Quaternion.Identity, _restLowerArm = Quaternion.Identity;
     private Node3D _modelRoot;
     private Combat.CombatController _combat;
-    private bool _isQuaternius;
 
     /// One trail, built once and reused for every swing. See SlashTrail for why
     /// it is pooled rather than spawned.
@@ -99,48 +96,32 @@ public partial class PlayerVisual : Node3D
         character.Name = "Character";
         character.RotationDegrees = new Vector3(0f, ModelYawOffsetDegrees, 0f);
         _modelRoot = character;
-
-        _skel = character.GetNodeOrNull<Skeleton3D>("Rig_Medium/Skeleton3D")
-             ?? character.GetNodeOrNull<Skeleton3D>("Armature/Skeleton3D")
-             ?? FindSkeleton(character);
-
-        _isQuaternius = _skel != null && (_skel.FindBone("hand_r") >= 0 || CharacterScene.Contains("quaternius"));
-
+        _skel = character.GetNodeOrNull<Skeleton3D>("Rig_Medium/Skeleton3D");
         if (_skel != null)
         {
             _upperArm = _skel.FindBone("upperarm.r");
-            if (_upperArm < 0) _upperArm = _skel.FindBone("upperarm_r");
             _lowerArm = _skel.FindBone("lowerarm.r");
-            if (_lowerArm < 0) _lowerArm = _skel.FindBone("lowerarm_r");
             if (_upperArm >= 0) _restUpperArm = _skel.GetBonePoseRotation(_upperArm);
             if (_lowerArm >= 0) _restLowerArm = _skel.GetBonePoseRotation(_lowerArm);
         }
         AddChild(character);
 
-        string wBone = WeaponBone;
-        if (!_isQuaternius && wBone == "hand_r") wBone = "handslot.r";
-        else if (_isQuaternius && wBone == "handslot.r") wBone = "hand_r";
-
-        string oBone = OffhandBone;
-        if (!_isQuaternius && oBone == "hand_l") oBone = "handslot.l";
-        else if (_isQuaternius && oBone == "handslot.l") oBone = "hand_l";
-
-        AttachProp(character, WeaponScene, wBone);
-        AttachProp(character, OffhandScene, oBone);
+        AttachProp(character, WeaponScene, WeaponBone);
+        AttachProp(character, OffhandScene, OffhandBone);
 
         _anim = new AnimationPlayer { Name = "AnimationPlayer" };
         character.AddChild(_anim);
 
-        string[] scenesToLoad = AnimationScenes != null && AnimationScenes.Length > 0
-            ? AnimationScenes
-            : (_isQuaternius ? DefaultQuaterniusAnimScenes : DefaultKayKitAnimScenes);
-
+        // Shared, not reloaded per character: see Core.AnimationLibraryCache.
+        // Each character used to instantiate both animation GLBs and deep-copy
+        // their libraries, which cost about 100ms of a 231ms room rebuild for
+        // three enemies.
         int libIndex = 0;
-        foreach (var path in scenesToLoad)
+        foreach (var path in AnimationScenes)
         {
             foreach (var lib in Core.AnimationLibraryCache.Get(path))
             {
-                _anim.AddAnimationLibrary($"lib{libIndex}", lib);
+                _anim.AddAnimationLibrary($"kk{libIndex}", lib);
                 libIndex++;
             }
         }
@@ -181,40 +162,6 @@ public partial class PlayerVisual : Node3D
 
     private string _actionClip = "", _locoClip = "";
 
-    private string ResolveLocoClip(string clipName)
-    {
-        if (!_isQuaternius) return clipName;
-        return clipName switch
-        {
-            "Idle_A" or "Idle_B" => "Idle",
-            "Running_A" => "Jog_Fwd",
-            "Running_B" => "Sprint",
-            "Walking_A" or "Walking_B" or "Walking_C" => "Walk",
-            "Jump_Start" => "Jump_Start",
-            "Jump_Idle" => "Jump",
-            "Hit_A" => "Hit_Chest",
-            _ => "Idle",
-        };
-    }
-
-    private string ResolveActionClip(string clipName)
-    {
-        if (!_isQuaternius) return clipName;
-        if (clipName == "Parry_A") return "Sword_Block";
-        if (clipName == "Slash_A")
-        {
-            if (_combat != null && _combat.SwingIsHeavy) return "Sword_Heavy_Combo";
-            int step = _combat != null ? _combat.ComboStep : 0;
-            return step switch
-            {
-                1 => "Sword_Regular_B",
-                2 => "Sword_Regular_C",
-                _ => "Sword_Regular_A",
-            };
-        }
-        return clipName;
-    }
-
     private void BuildBlendTree(Node3D character)
     {
         _locoNode = new AnimationNodeAnimation();
@@ -229,17 +176,8 @@ public partial class PlayerVisual : Node3D
             FilterEnabled = true,
         };
 
-        string sampleAction = _isQuaternius ? "Sword_Regular_A" : "Slash_A";
-        foreach (var path in ActionTrackPaths(sampleAction))
-        {
-            if (_isQuaternius)
-            {
-                string p = path.ToString();
-                if (p.Contains("pelvis") || p.Contains("thigh") || p.Contains("calf") || p.Contains("foot") || p.Contains("toe"))
-                    continue;
-            }
+        foreach (var path in ActionTrackPaths("Slash_A"))
             shot.SetFilterPath(path, true);
-        }
 
         var root = new AnimationNodeBlendTree();
         root.AddNode("loco", loco);
@@ -257,7 +195,8 @@ public partial class PlayerVisual : Node3D
         _tree.Active = true;
     }
 
-    /// The bones an action clip claims, read off the clip.
+    /// The bones an action clip claims, read off the clip. Slash_A and Parry_A
+    /// are authored on the same five, so one is enough to size the filter.
     private Godot.Collections.Array<NodePath> ActionTrackPaths(string clip)
     {
         var paths = new Godot.Collections.Array<NodePath>();
@@ -278,11 +217,10 @@ public partial class PlayerVisual : Node3D
     /// The legs. Switching this never interrupts an action: that is the point.
     private void SetLoco(string clipName)
     {
-        string resolved = ResolveLocoClip(clipName);
-        if (resolved == _locoClip) return;
-        string full = Full(resolved);
+        if (clipName == _locoClip) return;
+        string full = Full(clipName);
         if (full.Length == 0) return;
-        _locoClip = resolved;
+        _locoClip = clipName;
         _locoNode.Animation = full;
     }
 
@@ -290,10 +228,9 @@ public partial class PlayerVisual : Node3D
     /// is what a new combo step needs and what holding a guard does not.
     private void SetAction(string clipName, float speed, bool restart)
     {
-        string resolved = ResolveActionClip(clipName);
-        string full = Full(resolved);
+        string full = Full(clipName);
         if (full.Length == 0) return;
-        if (clipName != _actionClip || _actionNode.Animation != full)
+        if (clipName != _actionClip)
         {
             _actionClip = clipName;
             _actionNode.Animation = full;
@@ -518,7 +455,7 @@ public partial class PlayerVisual : Node3D
             _weaponMeshes = new System.Collections.Generic.List<MeshInstance3D>();
             if (_skel != null)
                 foreach (var child in _skel.GetChildren())
-                    if (child is BoneAttachment3D att && (att.BoneName == WeaponBone || att.BoneName == "hand_r" || att.BoneName == "handslot.r"))
+                    if (child is BoneAttachment3D att && att.BoneName == WeaponBone)
                         Collect(att, _weaponMeshes);
         }
 
@@ -593,36 +530,11 @@ public partial class PlayerVisual : Node3D
     ///
     /// Only continuing states are looped. A jump start, a landing or a hit are
     /// one-shot by nature and looping them would be its own bug.
-    public static readonly System.Collections.Generic.HashSet<string> KayKitLooping = new()
-    {
-        "Idle_A", "Idle_B", "Running_A", "Running_B",
-        "Walking_A", "Walking_B", "Walking_C", "Jump_Idle",
-    };
-
-    public static readonly System.Collections.Generic.HashSet<string> QuaterniusLooping = new()
-    {
-        "Crouch_Fwd", "Crouch_Idle", "Dance", "Driving", "Idle", "Idle_Talking", "Idle_Torch",
-        "Jog_Fwd", "Jump", "Pistol_Idle", "Push", "Sitting_Idle", "Sitting_Talking",
-        "Spell_Simple_Idle", "Sprint", "Swim_Fwd", "Swim_Idle", "Walk", "Walk_Formal",
-        "Idle_FoldArms", "Idle_Lantern", "Idle_No", "Idle_Rail", "Idle_Shield",
-        "Idle_TalkingPhone", "NinjaJump_Idle", "Slide", "TreeChopping", "Walk_Carry",
-        "Zombie_Idle", "Zombie_Walk_Fwd",
-    };
-
     public static readonly System.Collections.Generic.HashSet<string> Looping = new()
     {
         "Idle_A", "Idle_B", "Running_A", "Running_B",
         "Walking_A", "Walking_B", "Walking_C", "Jump_Idle",
-        "Crouch_Fwd", "Crouch_Idle", "Dance", "Driving", "Idle", "Idle_Talking", "Idle_Torch",
-        "Jog_Fwd", "Jump", "Pistol_Idle", "Push", "Sitting_Idle", "Sitting_Talking",
-        "Spell_Simple_Idle", "Sprint", "Swim_Fwd", "Swim_Idle", "Walk", "Walk_Formal",
-        "Idle_FoldArms", "Idle_Lantern", "Idle_No", "Idle_Rail", "Idle_Shield",
-        "Idle_TalkingPhone", "NinjaJump_Idle", "Slide", "TreeChopping", "Walk_Carry",
-        "Zombie_Idle", "Zombie_Walk_Fwd",
     };
-
-    public static bool IsContinuingClip(string name) =>
-        KayKitLooping.Contains(name) || QuaterniusLooping.Contains(name);
 
     /// Applied to the AnimationPlayer's own animations, after every library is
     /// added. Setting it on the duplicated AnimationLibrary before adding it
@@ -641,7 +553,7 @@ public partial class PlayerVisual : Node3D
             string name = key;
             int slash = name.LastIndexOf('/');
             if (slash >= 0) name = name.Substring(slash + 1);
-            if (!IsContinuingClip(name)) continue;
+            if (!Looping.Contains(name)) continue;
 
             var anim = _anim.GetAnimation(key);
             anim.LoopMode = Animation.LoopModeEnum.Linear;
@@ -660,35 +572,15 @@ public partial class PlayerVisual : Node3D
     {
         if (string.IsNullOrEmpty(scenePath)) return;
 
-        var skel = character.GetNodeOrNull<Skeleton3D>("Rig_Medium/Skeleton3D")
-                ?? character.GetNodeOrNull<Skeleton3D>("Armature/Skeleton3D")
-                ?? FindSkeleton(character);
+        var skel = character.GetNodeOrNull<Skeleton3D>("Rig_Medium/Skeleton3D");
         if (skel == null)
         {
             GD.PrintErr($"{Name}: no Skeleton3D, cannot attach '{scenePath}'");
             return;
         }
-
-        string actualBone = boneName;
-        if (skel.FindBone(actualBone) < 0)
+        if (skel.FindBone(boneName) < 0)
         {
-            if (boneName == WeaponBone || boneName == "handslot.r" || boneName == "hand_r")
-            {
-                if (skel.FindBone("hand_r") >= 0) actualBone = "hand_r";
-                else if (skel.FindBone("hand.R") >= 0) actualBone = "hand.R";
-                else if (skel.FindBone("handslot.r") >= 0) actualBone = "handslot.r";
-            }
-            else if (boneName == OffhandBone || boneName == "handslot.l" || boneName == "hand_l")
-            {
-                if (skel.FindBone("hand_l") >= 0) actualBone = "hand_l";
-                else if (skel.FindBone("hand.L") >= 0) actualBone = "hand.L";
-                else if (skel.FindBone("handslot.l") >= 0) actualBone = "handslot.l";
-            }
-        }
-
-        if (skel.FindBone(actualBone) < 0)
-        {
-            GD.PrintErr($"{Name}: bone '{actualBone}' not in rig, cannot attach '{scenePath}'");
+            GD.PrintErr($"{Name}: bone '{boneName}' not in rig, cannot attach '{scenePath}'");
             return;
         }
 
@@ -699,37 +591,23 @@ public partial class PlayerVisual : Node3D
             return;
         }
 
-        var attachment = new BoneAttachment3D { Name = $"Attach_{actualBone.Replace('.', '_')}" };
+        var attachment = new BoneAttachment3D { Name = $"Attach_{boneName}" };
         skel.AddChild(attachment);
-        attachment.BoneName = actualBone;
+        attachment.BoneName = boneName;
 
+        // A pivot between the bone and the prop, so the weapon can be swung
+        // without touching the skeleton. There is no attack clip to play: the
+        // free KayKit pack ships none.
         var pivot = new Node3D { Name = "SwingPivot" };
         attachment.AddChild(pivot);
         var prop = propScene.Instantiate<Node3D>();
         pivot.AddChild(prop);
 
-        if (actualBone == "hand_r")
-        {
-            prop.Position = new Vector3(0f, 0.05f, 0f);
-            prop.RotationDegrees = new Vector3(-90f, 0f, 0f);
-        }
-
-        if (boneName == WeaponBone || actualBone == "hand_r" || actualBone == "handslot.r")
+        if (boneName == WeaponBone)
         {
             _swingPivot = pivot;
             PolishBlade(prop);
         }
-    }
-
-    private static Skeleton3D FindSkeleton(Node node)
-    {
-        if (node is Skeleton3D skel) return skel;
-        foreach (var child in node.GetChildren())
-        {
-            var found = FindSkeleton(child);
-            if (found != null) return found;
-        }
-        return null;
     }
 
     /// <summary>
