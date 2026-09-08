@@ -31,7 +31,7 @@ Player movement, physics/collision response, and camera framing are one
 subsystem with one owner — not three. Jump arc, dash distance, wall-jump
 impulse and camera dead-zone all change together; splitting them across
 agents caused the cross-system regressions documented in the reference
-project (Claude-of-Duty) on tonemapping/sky/lighting. Do not split this.
+project (Duty-Call-Prototype) on tonemapping/sky/lighting. Do not split this.
 
 **Directory:** `src/PlayerCamera/`
 **Owns:** `CharacterBody3D` locked to the X/Y plane (Z axis frozen), all

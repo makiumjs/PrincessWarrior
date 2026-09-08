@@ -34,6 +34,6 @@ game/docs/critic-captures/
 game/_*.py
 
 # Temporary scratch & API dumps
-Claude outputs/
+scratch_outputs/
 extension_api.json
 /*.jpg

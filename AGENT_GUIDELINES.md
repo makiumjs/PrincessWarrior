@@ -1,4 +1,4 @@
-# PrincessWarrior - Claude Code Project Configuration
+# PrincessWarrior - Agent & Project Guidelines
 
 ## Project Overview
 2.5D Action-Roguevania built with Godot 4.7.2 Mono (.NET 8 / C#).
