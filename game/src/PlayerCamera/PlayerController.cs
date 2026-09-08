@@ -793,6 +793,16 @@ public partial class PlayerController : CharacterBody3D, IDamageable
         CurrentHealth = Mathf.Min(MaxHealth, CurrentHealth + amount);
         if (CurrentHealth == before) return;
 
+        EventBus.Instance?.EmitPlayerHealed(amount, GlobalPosition);
+        if (GetParent() != null && IsInstanceValid(GetParent()))
+        {
+            Combat.ImpactBurst.Spawn(
+                GetParent(),
+                GlobalPosition + new Vector3(0f, 1f, 0f),
+                new Color(0.35f, 1.0f, 0.65f),
+                reach: 1.2f,
+                life: 0.35f);
+        }
         BroadcastHealth();
     }
 

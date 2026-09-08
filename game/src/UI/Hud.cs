@@ -243,9 +243,11 @@ public partial class Hud : Control
     private void OnRunCompleted(int roomsCleared)
     {
         if (_runCompleteBanner == null) return;
-        // The banner has to say what to DO. Showing only "RUN COMPLETE" left the
-        // player standing in a finished room with no visible way forward.
-        _runCompleteBanner.Text = "RUN COMPLETE — " + roomsCleared + " rooms" + System.Environment.NewLine + "press JUMP for a new run";
+        int totalEmbers = Save.SaveManager.Instance?.Current?.TotalEmbers ?? 0;
+        int totalSlain = Save.SaveManager.Instance?.Current?.TotalEnemiesSlain ?? 0;
+        _runCompleteBanner.Text = "RUN COMPLETE — " + roomsCleared + " rooms" + System.Environment.NewLine +
+                                  $"Foes Slain: {totalSlain} | Embers: {totalEmbers} 🔥" + System.Environment.NewLine +
+                                  "press JUMP for a new run";
         _runCompleteBanner.Visible = true;
     }
 
@@ -824,7 +826,13 @@ public partial class Hud : Control
     private void UpdateEmbersDisplay(int total)
     {
         if (_embersCounter != null && IsInstanceValid(_embersCounter))
+        {
             _embersCounter.Text = $"{total} 🔥";
+            _embersCounter.PivotOffset = _embersCounter.Size * 0.5f;
+            var tween = CreateTween();
+            tween?.TweenProperty(_embersCounter, "scale", new Vector2(1.15f, 1.15f), 0.08f);
+            tween?.TweenProperty(_embersCounter, "scale", Vector2.One, 0.12f);
+        }
         _runeModal?.RefreshUI();
     }
 

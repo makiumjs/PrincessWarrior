@@ -219,6 +219,7 @@ public partial class RuneForgeModal : Control
         if (SaveManager.Instance.TrySpendEmbers(cost))
         {
             SaveManager.Instance.SetWorldFlag(flag, true);
+            EventBus.Instance?.EmitRuneForged(flag);
             RefreshUI();
             GD.Print($"[RuneForge] Unlocked perk '{flag}' for {cost} embers.");
         }

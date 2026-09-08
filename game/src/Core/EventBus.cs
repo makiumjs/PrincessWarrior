@@ -165,6 +165,16 @@ public partial class EventBus : Node
     /// </summary>
     [Signal] public delegate void RuneForgeRequestedEventHandler(bool open);
 
+    /// <summary>
+    /// Emitted when a perk is forged/purchased at the Rune Forge.
+    /// </summary>
+    [Signal] public delegate void RuneForgedEventHandler(string runeFlag);
+
+    /// <summary>
+    /// Emitted when the player receives healing (e.g. from rune_parry_heal).
+    /// </summary>
+    [Signal] public delegate void PlayerHealedEventHandler(int amount, Vector3 position);
+
     public void EmitJumped() => EmitSignal(SignalName.Jumped);
     public void EmitDoubleJumped() => EmitSignal(SignalName.DoubleJumped);
     public void EmitDashed() => EmitSignal(SignalName.Dashed);
@@ -232,4 +242,10 @@ public partial class EventBus : Node
 
     public void EmitRuneForgeRequested(bool open) =>
         EmitSignal(SignalName.RuneForgeRequested, open);
+
+    public void EmitRuneForged(string runeFlag) =>
+        EmitSignal(SignalName.RuneForged, runeFlag);
+
+    public void EmitPlayerHealed(int amount, Vector3 position) =>
+        EmitSignal(SignalName.PlayerHealed, amount, position);
 }

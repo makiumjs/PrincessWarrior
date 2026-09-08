@@ -112,6 +112,8 @@ public partial class AudioManager : Node
         EventBus.Instance.HeatChanged += OnHeatChangedForWarning;
         EventBus.Instance.PlayerHealthChanged += OnHealthForHeartbeat;
         EventBus.Instance.PlayerDied += OnDiedForHeartbeat;
+        EventBus.Instance.RuneForged += OnRuneForged;
+        EventBus.Instance.PlayerHealed += OnPlayerHealed;
 
         _ambienceVoice = MakeExtraVoice("Ambience", AmbienceVolumeDb);
         _accentVoice = MakeExtraVoice("Accent", AmbienceVolumeDb + 4f);
@@ -159,6 +161,8 @@ public partial class AudioManager : Node
         EventBus.Instance.HeatChanged -= OnHeatChangedForWarning;
         EventBus.Instance.PlayerHealthChanged -= OnHealthForHeartbeat;
         EventBus.Instance.PlayerDied -= OnDiedForHeartbeat;
+        EventBus.Instance.RuneForged -= OnRuneForged;
+        EventBus.Instance.PlayerHealed -= OnPlayerHealed;
     }
 
     // ---- EventBus handlers -------------------------------------------------
@@ -825,6 +829,27 @@ public partial class AudioManager : Node
             mixed[i] = Mathf.Clamp(clash[i] * 0.7f + r * 0.6f, -0.95f, 0.95f);
         }
         Emit(mixed, "PerfectParried");
+    }
+
+    private void OnRuneForged(string runeFlag)
+    {
+        // Anvil strike: rich metallic hit with rising harmonic chime
+        var strike = GenerateClick(duration: 0.16f, decay: 18f, toneFreq: 880f, noiseMix: 0.25f);
+        var chime = GenerateRisingBlip(startFreq: 880f, endFreq: 1760f, duration: 0.22f);
+        var mixed = new float[Math.Max(strike.Length, chime.Length)];
+        for (int i = 0; i < mixed.Length; i++)
+        {
+            float s = i < strike.Length ? strike[i] * 0.7f : 0f;
+            float c = i < chime.Length ? chime[i] * 0.5f : 0f;
+            mixed[i] = Mathf.Clamp(s + c, -0.95f, 0.95f);
+        }
+        Emit(mixed, "RuneForged");
+    }
+
+    private void OnPlayerHealed(int amount, Vector3 position)
+    {
+        // Soothing radiant chime: bright clean tone at 1320Hz cascading to 1760Hz
+        Emit(GenerateRisingBlip(startFreq: 1320f, endFreq: 1760f, duration: 0.18f), "PlayerHealed");
     }
 
     // ---- The impact hierarchy ----------------------------------------------
