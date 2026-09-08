@@ -326,6 +326,7 @@ public partial class DungeonRoomBuilder : Node3D
                     PhaseOffset = phase * 2.4f,
                 });
             foreach (var w in composer.Walls) PlaceClimbableWall(w);
+            PlaceElevatedPlatforms(composer);
         };
 
         yield return () => BuildLedgeSupports(composer);
@@ -1523,6 +1524,54 @@ public partial class DungeonRoomBuilder : Node3D
             Shape = new BoxShape3D { Size = new Vector3(0.8f, w.Height, Grid) },
         });
         AddChild(body);
+    }
+
+    /// <summary>
+    /// Constructs multi-tiered elevated platforms in combat arenas.
+    /// Suspended at +3.2m height with stone pillars and torches, offering vertical
+    /// combat, jump attacks, and strategic positioning above ground hazards.
+    /// Headroom beneath remains at 3.2m so traversal bot and ground navigation pass smoothly.
+    /// </summary>
+    private void PlaceElevatedPlatforms(MicroChunkComposer composer)
+    {
+        foreach (var r in composer.ElevatedPlatforms)
+        {
+            int tiles = Mathf.Max(1, Mathf.CeilToInt(r.Width / Grid));
+            for (int i = 0; i < tiles; i++)
+            {
+                var at = new Vector3(r.X + i * Grid + Grid * 0.5f, r.Y, 0f);
+                var blockAt = at + new Vector3(0f, -LedgeThickness * 0.5f, 0f);
+                PlaceBatched("floor_foundation_allsides",
+                    new Transform3D(Basis.Identity.Scaled(new Vector3(1f, Mathf.Max(LedgeThickness, 0.35f), 1f)), blockAt),
+                    LedgeTint);
+                PlaceBatched("floor_tile_large", new Transform3D(Basis.Identity, at));
+            }
+
+            float span = tiles * Grid;
+            var body = new StaticBody3D
+            {
+                Position = new Vector3(r.X + span * 0.5f, r.Y - 0.075f, 0f),
+                CollisionLayer = PhysicsLayers.World,
+                CollisionMask = 0,
+            };
+            body.AddChild(new CollisionShape3D
+            {
+                Shape = new BoxShape3D { Size = new Vector3(span, 0.15f, Grid) },
+            });
+            AddChild(body);
+
+            // Architectural supports: stone columns supporting the elevated balcony
+            Place("column", new Vector3(r.X, r.Y - WallHeight, WallZ + 0.8f), 0f);
+            Place("column", new Vector3(r.X + span, r.Y - WallHeight, WallZ + 0.8f), 0f);
+
+            if (SpawnTorches)
+            {
+                MountTorch(new Vector3(r.X, r.Y + 1.2f, WallZ + 0.55f), 2.8f);
+                MountTorch(new Vector3(r.X + span, r.Y + 1.2f, WallZ + 0.55f), 2.8f);
+            }
+
+            HangBanner(new Vector3(r.X + span * 0.5f, r.Y + 2.2f, WallZ + 0.45f));
+        }
     }
 
     /// Wall run behind the play plane, long enough to back the whole room —

@@ -24,8 +24,16 @@ public static class AnimationLibraryCache
     /// model held its last pose while the body kept moving.
     public static readonly HashSet<string> Looping = new()
     {
+        // KayKit
         "Idle_A", "Idle_B", "Running_A", "Running_B",
         "Walking_A", "Walking_B", "Walking_C", "Jump_Idle",
+        // Quaternius
+        "Crouch_Fwd", "Crouch_Idle", "Dance", "Driving", "Idle", "Idle_Talking", "Idle_Torch",
+        "Jog_Fwd", "Jump", "Pistol_Idle", "Push", "Sitting_Idle", "Sitting_Talking",
+        "Spell_Simple_Idle", "Sprint", "Swim_Fwd", "Swim_Idle", "Walk", "Walk_Formal",
+        "Idle_FoldArms", "Idle_Lantern", "Idle_No", "Idle_Rail", "Idle_Shield",
+        "Idle_TalkingPhone", "NinjaJump_Idle", "Slide", "TreeChopping", "Walk_Carry",
+        "Zombie_Idle", "Zombie_Walk_Fwd",
     };
 
     public static IReadOnlyList<AnimationLibrary> Get(string scenePath)

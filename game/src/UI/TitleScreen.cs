@@ -27,6 +27,7 @@ public partial class TitleScreen : Control
         ("attack_light", "Light attack"),
         ("attack_heavy", "Heavy attack (hold to charge)"),
         ("parry", "Parry"),
+        ("ui_accept", "Select / Interact"),
         ("pause", "Pause"),
     };
 

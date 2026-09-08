@@ -838,6 +838,7 @@ public partial class Hud : Control
 
     private void OnRuneForgeRequested(bool open)
     {
+        GetTree().Paused = open;
         if (open) _runeModal?.Open();
         else _runeModal?.Close();
     }

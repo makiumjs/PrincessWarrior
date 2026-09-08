@@ -80,7 +80,7 @@ public partial class RunestoneShrine : Node3D
         _prompt = new Label3D
         {
             Name = "Prompt",
-            Text = "[E] FORGIA DELLE RUNE",
+            Text = "[A / E] FORGIA DELLE RUNE",
             FontSize = 26,
             OutlineSize = 6,
             Modulate = new Color(1.0f, 0.9f, 0.5f),
@@ -125,12 +125,9 @@ public partial class RunestoneShrine : Node3D
     {
         if (!_playerNearby) return;
 
-        if (@event is InputEventKey key && key.Pressed && !key.Echo && key.Keycode == Key.E)
-        {
-            EventBus.Instance?.EmitRuneForgeRequested(true);
-            GetViewport().SetInputAsHandled();
-        }
-        else if (@event is InputEventJoypadButton joy && joy.Pressed && joy.ButtonIndex == JoyButton.DpadUp)
+        if (@event.IsActionPressed("ui_accept")
+            || (@event is InputEventKey key && key.Pressed && !key.Echo && (key.Keycode == Key.E || key.Keycode == Key.Enter || key.Keycode == Key.Space))
+            || (@event is InputEventJoypadButton joy && joy.Pressed && (joy.ButtonIndex == JoyButton.A || joy.ButtonIndex == JoyButton.DpadUp)))
         {
             EventBus.Instance?.EmitRuneForgeRequested(true);
             GetViewport().SetInputAsHandled();

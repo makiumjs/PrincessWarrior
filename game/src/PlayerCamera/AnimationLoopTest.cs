@@ -29,24 +29,40 @@ public partial class AnimationLoopTest : Node
         var pAnim = FindFirst<AnimationPlayer>(player);
         var eAnim = FindFirst<AnimationPlayer>(enemy);
 
+        int pExpected = CountExpectedLooping(pAnim);
+        int eExpected = CountExpectedLooping(eAnim);
         int pLooping = CountLooping(pAnim, out int pOneShotWronglyLooped);
         int eLooping = CountLooping(eAnim, out int eOneShotWronglyLooped);
 
-        GD.Print($"[ANIM] player: {pLooping} continuing clips loop, " +
+        GD.Print($"[ANIM] player: {pLooping} continuing clips loop (expected {pExpected}), " +
                  $"{pOneShotWronglyLooped} one-shot clips wrongly looped");
-        GD.Print($"[ANIM] enemy:  {eLooping} continuing clips loop, " +
+        GD.Print($"[ANIM] enemy:  {eLooping} continuing clips loop (expected {eExpected}), " +
                  $"{eOneShotWronglyLooped} one-shot clips wrongly looped");
 
         bool ok = pAnim != null && eAnim != null
-               && pLooping == PlayerVisual.Looping.Count
-               && eLooping == PlayerVisual.Looping.Count
+               && pLooping == pExpected && pExpected > 0
+               && eLooping == eExpected && eExpected > 0
                && pOneShotWronglyLooped == 0
                && eOneShotWronglyLooped == 0;
 
         GD.Print(ok
             ? "[ANIM] RESULT: PASS (continuing clips loop on both player and enemies; one-shots do not)"
             : "[ANIM] RESULT: FAIL");
-        GetTree().Quit();
+        GetTree().Quit(ok ? 0 : 1);
+    }
+
+    private static int CountExpectedLooping(AnimationPlayer ap)
+    {
+        if (ap == null) return -1;
+        int count = 0;
+        foreach (string key in ap.GetAnimationList())
+        {
+            string name = key;
+            int slash = name.LastIndexOf('/');
+            if (slash >= 0) name = name.Substring(slash + 1);
+            if (PlayerVisual.IsContinuingClip(name)) count++;
+        }
+        return count;
     }
 
     private static int CountLooping(AnimationPlayer ap, out int oneShotLooped)
@@ -62,7 +78,7 @@ public partial class AnimationLoopTest : Node
             if (slash >= 0) name = name.Substring(slash + 1);
 
             bool loops = ap.GetAnimation(key).LoopMode != Animation.LoopModeEnum.None;
-            if (PlayerVisual.Looping.Contains(name)) { if (loops) looping++; }
+            if (PlayerVisual.IsContinuingClip(name)) { if (loops) looping++; }
             else if (loops) oneShotLooped++;
         }
         return looping;

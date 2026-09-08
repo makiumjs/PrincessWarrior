@@ -149,6 +149,9 @@ public sealed class MicroChunkComposer
     public IReadOnlyList<Vector3> EncounterPoints => _encounters;
     private readonly List<Vector3> _encounters = new();
 
+    public IReadOnlyList<PlatformRect> ElevatedPlatforms => _elevatedPlatforms;
+    private readonly List<PlatformRect> _elevatedPlatforms = new();
+
     /// The horizontal span of each Arena, and the height its floor sits at.
     /// The builder puts a barrier at the right-hand edge of each one: an arena
     /// you can sprint past is a decoration, not an encounter.
@@ -310,6 +313,14 @@ public sealed class MicroChunkComposer
                 float x0 = _cursorX;
                 float centre = _cursorX + width * 0.5f;
                 Emit(width);
+
+                // Multi-tiered vertical arena architecture:
+                // Suspended high perch platform at +3.2m height, width 4m.
+                // 3.2m vertical headroom ensures bot running & ground combat knockback pass seamlessly,
+                // while double-jump (reach 3.8m) grants intentional high-ground advantage for player.
+                float platWidth = 4.0f;
+                _elevatedPlatforms.Add(new PlatformRect(centre - platWidth * 0.5f, _cursorY + 3.2f, platWidth));
+
                 _encounters.Add(new Vector3(centre, _cursorY + 0.5f, 0f));
                 _encounters.Add(new Vector3(centre + 3f, _cursorY + 0.5f, 0f));
                 _arenas.Add((x0, _cursorX, _cursorY));

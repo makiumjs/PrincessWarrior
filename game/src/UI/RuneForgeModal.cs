@@ -181,6 +181,7 @@ public partial class RuneForgeModal : Control
     {
         if (!Visible) return;
         Visible = false;
+        EventBus.Instance?.EmitRuneForgeRequested(false);
     }
 
     public void RefreshUI()
@@ -231,7 +232,8 @@ public partial class RuneForgeModal : Control
 
         if (@event.IsActionPressed("pause")
             || @event.IsActionPressed("ui_cancel")
-            || (@event is InputEventKey key && key.Pressed && key.Keycode == Key.E))
+            || (@event is InputEventJoypadButton joy && joy.Pressed && joy.ButtonIndex == JoyButton.B)
+            || (@event is InputEventKey key && key.Pressed && (key.Keycode == Key.E || key.Keycode == Key.Escape)))
         {
             Close();
             GetViewport().SetInputAsHandled();
